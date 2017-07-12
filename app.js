@@ -37,7 +37,15 @@ app.get('/investigators/:id(\\d+)', function (req, res) {
 // --------------------------------------------------
 app.get('/investigators', function (req, res) {
   console.log("/investigators");
-  connection.query('SELECT * from investigator', 
+  var sql = `
+    select   investigator_id, investigator_name, 
+             institution
+    from     investigator 
+    order by investigator_name
+  `;
+
+  connection.query(
+    sql,
     function (error, results, fields) {
       if (error) throw error;
       res.json(results);
@@ -97,10 +105,13 @@ function getProjects() {
 
 // --------------------------------------------------
 function getDomains(projects) {
-  sql = 'select d.domain_id, d.domain_name '
-      + 'from domain d, project_to_domain p2d '
-      + 'where p2d.project_id=? '
-      + 'and p2d.domain_id=d.domain_id';
+  var sql = `
+    select   d.domain_id, d.domain_name 
+    from     domain d, project_to_domain p2d 
+    where    p2d.project_id=? 
+    and      p2d.domain_id=d.domain_id
+    order by domain_name
+  `;
 
   f = function (project) {
     return new Promise(function (resolve, reject) {
@@ -120,10 +131,13 @@ function getDomains(projects) {
 
 // --------------------------------------------------
 function getInvestigators(projects) {
-  sql = 'select i.investigator_id, i.investigator_name, i.institution '
-      + 'from project_to_investigator p2i, investigator i '
-      + 'where p2i.project_id=? '
-      + 'and p2i.investigator_id=i.investigator_id';
+  var sql = `
+    select   i.investigator_id, i.investigator_name, i.institution
+    from     project_to_investigator p2i, investigator i
+    where    p2i.project_id=?
+    and      p2i.investigator_id=i.investigator_id
+    order by investigator_name
+  `;
 
   f = function (project) {
     return new Promise(function (resolve, reject) {
