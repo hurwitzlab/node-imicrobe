@@ -2,6 +2,7 @@ const express = require('express')
 const app = express()
 const port = 3006;
 var cors = require('cors')
+var Promise = require('promise');
 
 app.use(cors())
 
@@ -66,29 +67,10 @@ app.get('/projects/:id(\\d+)', function (req, res) {
 // --------------------------------------------------
 app.get('/projects', function (req, res) {
   console.log("/projects");
-  connection.query('SELECT * from project', 
-    function (error, results, fields) {
-      if (error) throw error;
-      for (i = 0; i < results.length; i++) {
-        results[i].domains = get_domains(results[i].project_id);
-      }
-      res.json(results);
-    }
+  getProjects().then(getDomains).then(getInvestigators).then(
+    function (data) { res.json(data) }
   );
-})
-
-// --------------------------------------------------
-function get_domains(project_id) {
-  sql = 'select d.domain_name '
-      + 'from domain d, project_to_domain p2d '
-      + 'where p2d.project_id=? '
-      + 'and p2d.domain_id=d.domain_id';
-
-  connection.query(sql, [project_id], function (error, results, fields) {
-    if (error) throw error;
-    return results.map(function (o) { return o['domain_name'] });
-  });
-}
+});
 
 // --------------------------------------------------
 app.get('*', function(req, res){
@@ -99,3 +81,62 @@ app.get('*', function(req, res){
 app.listen(port, function () {
   console.log('Example app listening on port ' + port)
 })
+
+// --------------------------------------------------
+function getProjects() {
+  return new Promise(function (resolve, reject) {
+    connection.query(
+      'SELECT * from project',
+      function (error, results, fields) {
+        if (error) throw error;
+        resolve(results);
+      }
+    );
+  });
+}
+
+// --------------------------------------------------
+function getDomains(projects) {
+  sql = 'select d.domain_id, d.domain_name '
+      + 'from domain d, project_to_domain p2d '
+      + 'where p2d.project_id=? '
+      + 'and p2d.domain_id=d.domain_id';
+
+  f = function (project) {
+    return new Promise(function (resolve, reject) {
+      connection.query(
+        sql,
+        [project.project_id],
+        function (error, results, fields) {
+          if (error) return reject(err);
+          project['domains'] = results;
+          resolve(project);
+        }
+      );
+    });
+  }
+  return Promise.all(projects.map(f));
+}
+
+// --------------------------------------------------
+function getInvestigators(projects) {
+  sql = 'select i.investigator_id, i.investigator_name, i.institution '
+      + 'from project_to_investigator p2i, investigator i '
+      + 'where p2i.project_id=? '
+      + 'and p2i.investigator_id=i.investigator_id';
+
+  f = function (project) {
+    return new Promise(function (resolve, reject) {
+      connection.query(
+        sql,
+        [project.project_id],
+        function (error, results, fields) {
+          if (error) return reject(err);
+          project['investigators'] = results;
+          resolve(project);
+        }
+      );
+    });
+  }
+  return Promise.all(projects.map(f));
+}
