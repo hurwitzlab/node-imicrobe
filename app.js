@@ -10,8 +10,8 @@ app.use(cors())
 var mysql = require('mysql');
 var connection = mysql.createConnection({
     host     : 'localhost',
-    user     : 'kyclark',
-    password : 'g0p3rl!',
+    user     : 'imicrobe',
+    password : 'imicrobe123',
     database : 'imicrobe'
 });
 
@@ -78,6 +78,12 @@ app.get('/projects', function (req, res) {
   getProjects().then(getDomains).then(getInvestigators).then(
     function (data) { res.json(data) }
   );
+});
+
+// --------------------------------------------------
+app.get('/samples', function (req, res) {
+  console.log("/samples");
+  getSamples().then( (data) => res.json(data) ) ;
 });
 
 // --------------------------------------------------
@@ -153,4 +159,44 @@ function getInvestigators(projects) {
     });
   }
   return Promise.all(projects.map(f));
+}
+
+// --------------------------------------------------
+/* FIXME desired query is below, file count was removed due to error
+select  s.sample_id, s.sample_name, s.sample_type,
+                   p.project_id, p.project_name,
+                   s.latitude, s.longitude,
+                   d.domain_name,
+                   count(f.sample_file_id) as num_files
+        from       sample s
+        inner join project p
+        on         s.project_id=p.project_id
+        left join  sample_file f
+        on         s.sample_id=f.sample_id
+        left join  project_to_domain p2d
+        on         p.project_id=p2d.project_id
+        left join  domain d
+        on         p2d.domain_id=d.domain_id
+*/
+function getSamples() {
+  return new Promise(function (resolve, reject) {
+    connection.query(
+      ` select     s.sample_id, s.sample_name, s.sample_type,
+                   p.project_id, p.project_name,
+                   s.latitude, s.longitude,
+                   d.domain_name
+        from       sample s
+        inner join project p
+        on         s.project_id=p.project_id
+        left join  project_to_domain p2d
+        on         p.project_id=p2d.project_id
+        left join  domain d
+        on         p2d.domain_id=d.domain_id
+      `,
+      function (error, results, fields) {
+        if (error) throw error;
+        resolve(results);
+      }
+    );
+  });
 }
