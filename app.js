@@ -3,17 +3,13 @@ const app = express()
 const port = 3006;
 var cors = require('cors')
 var Promise = require('promise');
+var config = require('./config.json');
 
 app.use(cors())
 
 // --------------------------------------------------
 var mysql = require('mysql');
-var connection = mysql.createConnection({
-    host     : 'localhost',
-    user     : 'imicrobe',
-    password : 'imicrobe123',
-    database : 'imicrobe'
-});
+var connection = mysql.createConnection(config.mysql);
 
 // --------------------------------------------------
 app.get('/investigators/:id(\\d+)', function (req, res) {
