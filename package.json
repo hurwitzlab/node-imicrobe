@@ -9,6 +9,7 @@
     "cors": "^2.8.3",
     "express": "^4.15.3",
     "mysql": "^2.13.0",
+    "printf": "^0.2.5",
     "promise": "^8.0.0"
   },
   "devDependencies": {},
