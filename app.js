@@ -18,7 +18,7 @@ var connection = mysql.createConnection(config.mysql);
 
 // --------------------------------------------------
 app.get('/investigators/:id(\\d+)', function (req, res) {
-  id = req.params.id;
+  var id = req.params.id;
   console.log("/investigators/" + id);
   connection.query(
     'select * from investigator where investigator_id=?', 
@@ -56,7 +56,7 @@ app.get('/investigators', function (req, res) {
 
 // --------------------------------------------------
 app.get('/projects/:id(\\d+)', function (req, res) {
-  id = req.params.id;
+  var id = req.params.id;
   console.log("/projects/" + id);
   getProject(id)
     .then(getDomainsForProject)
@@ -82,8 +82,16 @@ app.get('/search/:query', function (req, res) {
   var query = req.params.query;
   console.log("/search/" + query);
   getSearchResults(query)
-    .then( function (data) { res.json(data) }
-  );
+    .then(expandSearchResults)
+    .then( (data) => res.json(data) );
+});
+
+
+// --------------------------------------------------
+app.get('/samples/:id(\\d+)', function (req, res) {
+  var id = req.params.id;
+  console.log("/samples/" + id);
+  getSample(id).then( (data) => res.json(data) ) ;
 });
 
 
@@ -104,6 +112,7 @@ app.get('/', function(req, res){
 
 
 // --------------------------------------------------
+//
 // catch-all function
 // 
 app.get('*', function(req, res){
@@ -178,7 +187,6 @@ function getDomainsForProjects(projects) {
 
 // --------------------------------------------------
 function getInvestigatorsForProject(project) {
-
   return new Promise(function (resolve, reject) {
     connection.query(
       `
@@ -198,11 +206,56 @@ function getInvestigatorsForProject(project) {
   });
 }
 
+
 // --------------------------------------------------
 function getInvestigatorsForProjects(projects) {
   return Promise.all(projects.map(getInvestigatorsForProject));
 }
 
+
+// --------------------------------------------------
+function expandSearchResult(record) {
+  var sqlByTable = {
+    "investigator": `select investigator_name as name
+                     from   investigator
+                     where  investigator_id=?`,
+    "project":      `select project_name as name
+                     from   project
+                     where  project_id=?`,
+    "publication":  `select title as name 
+                     from   publication
+                     where  publication_id=?`,
+    "sample":       `select sample_name as name
+                     from   sample
+                     where  sample_id=?`,
+  };
+
+  if (record.table_name in sqlByTable) {
+    return new Promise(function (resolve, reject) {
+      connection.query(
+        sqlByTable[record.table_name],
+        [record.id],
+        function (error, results, fields) {
+          if (error) reject(error);
+          if (results.length == 1) {
+            record['name'] = results[0].name;
+            resolve(record);
+          }
+          else {
+            reject(printf("Bad primary key for table '%s': %s", 
+              record.table_name, record.id));
+          }
+        }
+      );
+    });
+  }
+}
+
+
+// --------------------------------------------------
+function expandSearchResults(results) {
+  return Promise.all(results.map(expandSearchResult));
+}
 
 // --------------------------------------------------
 function getPublicationsForProject(project) {
@@ -225,13 +278,37 @@ function getPublicationsForProject(project) {
 }
 
 // --------------------------------------------------
+function getSample(id) {
+  return new Promise(function (resolve, reject) {
+    connection.query(
+      `
+        select s.sample_id, s.sample_acc, s.sample_name,
+               s.sample_type, s.sample_description, s.comments,
+               s.taxon_id, s.url, p.project_id, p.project_name
+        from   sample s, project p
+        where  s.sample_id=?
+        and    s.project_id=p.project_id
+      `,
+      [id],
+      function (error, results, fields) {
+        if (error) reject(error);
+        if (results.length == 1) 
+          resolve(results[0]);
+        else 
+          reject("Bad sample id: " + id);
+      }
+    );
+  });
+}
+
+
+// --------------------------------------------------
 function getSearchResults(query) {
   return new Promise(function (resolve, reject) {
-
     connection.query(
       printf(
         `
-        select search_id, table_name, primary_key, search_text 
+        select table_name, primary_key as id
         from   search 
         where  match (search_text) against (%s in boolean mode)
         `,
@@ -244,6 +321,7 @@ function getSearchResults(query) {
     );
   });
 }
+
 
 // --------------------------------------------------
 /* FIXME desired query is below, file count was removed due to error
