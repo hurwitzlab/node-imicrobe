@@ -3,7 +3,7 @@
 To bring up:
 
     $ npm install
-    $ node app.js
+    $ npm start
 
 # Author
 
