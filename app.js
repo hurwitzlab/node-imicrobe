@@ -81,9 +81,7 @@ app.get('/projects', function (req, res) {
 app.get('/search/:query', function (req, res) {
   var query = req.params.query;
   console.log("/search/" + query);
-  getSearchResults(query)
-    .then(expandSearchResults)
-    .then( (data) => res.json(data) );
+  getSearchResults(query).then( (data) => res.json(data) );
 });
 
 
@@ -214,50 +212,6 @@ function getInvestigatorsForProjects(projects) {
 
 
 // --------------------------------------------------
-function expandSearchResult(record) {
-  var sqlByTable = {
-    "investigator": `select investigator_name as name
-                     from   investigator
-                     where  investigator_id=?`,
-    "project":      `select project_name as name
-                     from   project
-                     where  project_id=?`,
-    "publication":  `select title as name 
-                     from   publication
-                     where  publication_id=?`,
-    "sample":       `select sample_name as name
-                     from   sample
-                     where  sample_id=?`,
-  };
-
-  if (record.table_name in sqlByTable) {
-    return new Promise(function (resolve, reject) {
-      connection.query(
-        sqlByTable[record.table_name],
-        [record.id],
-        function (error, results, fields) {
-          if (error) reject(error);
-          if (results.length == 1) {
-            record['name'] = results[0].name;
-            resolve(record);
-          }
-          else {
-            reject(printf("Bad primary key for table '%s': %s", 
-              record.table_name, record.id));
-          }
-        }
-      );
-    });
-  }
-}
-
-
-// --------------------------------------------------
-function expandSearchResults(results) {
-  return Promise.all(results.map(expandSearchResult));
-}
-
-// --------------------------------------------------
 function getPublicationsForProject(project) {
   return new Promise(function (resolve, reject) {
     connection.query(
@@ -308,7 +262,7 @@ function getSearchResults(query) {
     connection.query(
       printf(
         `
-        select table_name, primary_key as id
+        select table_name, primary_key as id, object_name as name
         from   search 
         where  match (search_text) against (%s in boolean mode)
         `,
@@ -339,10 +293,7 @@ select  s.sample_id, s.sample_name, s.sample_type,
         on         p.project_id=p2d.project_id
         left join  domain d
         on         p2d.domain_id=d.domain_id
-*/
-function getSamples() {
-  return new Promise(function (resolve, reject) {
-    connection.query(
+
       ` select     s.sample_id, s.sample_name, s.sample_type,
                    p.project_id, p.project_name,
                    s.latitude, s.longitude,
@@ -354,6 +305,17 @@ function getSamples() {
         on         p.project_id=p2d.project_id
         left join  domain d
         on         p2d.domain_id=d.domain_id
+      `,
+*/
+function getSamples() {
+  return new Promise(function (resolve, reject) {
+    connection.query(
+      `
+        select s.sample_id, s.sample_acc, s.sample_name,
+               s.sample_type, s.sample_description, s.comments,
+               s.taxon_id, s.url, p.project_id, p.project_name
+        from   sample s, project p
+        where  s.project_id=p.project_id
       `,
       function (error, results, fields) {
         if (error) throw error;
