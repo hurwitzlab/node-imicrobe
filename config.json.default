@@ -4,5 +4,6 @@
         "user": "imicrobe",
         "password": "<password>",
         "database": "imicrobe"
-    }
+    },
+    "serverPort": 3006
 }
