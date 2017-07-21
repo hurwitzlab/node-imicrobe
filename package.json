@@ -6,6 +6,7 @@
   "dependencies": {
     "Q": "0.0.1",
     "bluebird": "^3.5.0",
+    "cluster": "0.7.7",
     "cors": "^2.8.3",
     "express": "^4.15.3",
     "mysql": "^2.13.0",

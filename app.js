@@ -1,22 +1,59 @@
-"use strict";
+'use strict';
 
 const express = require('express')
-const app = express()
-const port = 3006;
-var cors = require('cors')
+const app = express();
+var cors = require('cors');
 var Promise = require('promise');
 var printf = require('printf');
+var cluster = require('cluster');
+
+// Load config file
 var config = require('./config.json');
 
-app.use(cors())
+// Spawn workers and start server
+var workers = process.env.WORKERS || require('os').cpus().length;
 
+if (cluster.isMaster) {
+    console.log('Start cluster with %s workers', workers);
 
-// --------------------------------------------------
+    for (var i = 0; i < workers; ++i) {
+        var worker = cluster.fork().process;
+        console.log('Worker %s started.', worker.pid);
+    }
+
+    cluster.on('online', function(worker) {
+        console.log('Worker ' + worker.process.pid + ' is online');
+    });
+
+    cluster.on('exit', function(worker) {
+        console.log('Worker %s died. restarting...', worker.process.pid);
+        cluster.fork();
+    });
+
+}
+else {
+    var server = app.listen(config.serverPort, function() {
+        console.log('Process ' + process.pid + ' is listening to all incoming requests on port ' + config.serverPort);
+    });
+}
+
+// Global uncaught except handler
+process.on('uncaughtException', function (err) {
+    console.error((new Date).toUTCString() + ' uncaughtException:', err.message)
+    console.error(err.stack)
+    process.exit(1)
+})
+
+// Connect to DB
 var mysql = require('mysql');
 var connection = mysql.createConnection(config.mysql);
 
 
 // --------------------------------------------------
+// Routes
+// --------------------------------------------------
+app.use(cors());
+
 app.get('/investigators/:id(\\d+)', function (req, res) {
   var id = req.params.id;
   console.log("/investigators/" + id);
@@ -35,7 +72,6 @@ app.get('/investigators/:id(\\d+)', function (req, res) {
   );
 })
 
-
 // --------------------------------------------------
 app.get('/investigators', function (req, res) {
   console.log("/investigators");
@@ -53,7 +89,6 @@ app.get('/investigators', function (req, res) {
   );
 })
 
-
 // --------------------------------------------------
 app.get('/projects/:id(\\d+)', function (req, res) {
   var id = req.params.id;
@@ -65,7 +100,6 @@ app.get('/projects/:id(\\d+)', function (req, res) {
     .then(function (data) { res.json(data) });
 })
 
-
 // --------------------------------------------------
 app.get('/projects', function (req, res) {
   console.log("/projects");
@@ -76,14 +110,12 @@ app.get('/projects', function (req, res) {
   );
 });
 
-
 // --------------------------------------------------
 app.get('/search/:query', function (req, res) {
   var query = req.params.query;
   console.log("/search/" + query);
   getSearchResults(query).then( (data) => res.json(data) );
 });
-
 
 // --------------------------------------------------
 app.get('/samples/:id(\\d+)', function (req, res) {
@@ -92,13 +124,11 @@ app.get('/samples/:id(\\d+)', function (req, res) {
   getSample(id).then( (data) => res.json(data) ) ;
 });
 
-
 // --------------------------------------------------
 app.get('/samples', function (req, res) {
   console.log("/samples");
   getSamples().then( (data) => res.json(data) ) ;
 });
-
 
 // --------------------------------------------------
 app.get('/', function(req, res){
@@ -108,23 +138,17 @@ app.get('/', function(req, res){
   res.json({ "routes": routes });
 });
 
-
 // --------------------------------------------------
-//
 // catch-all function
-// 
 app.get('*', function(req, res){
   res.status(404).send("Unknown route: " + req.path);
 });
 
 
 // --------------------------------------------------
-app.listen(port, function () {
-  console.log('Example app listening on port ' + port)
-})
-
-
+// Database Queries
 // --------------------------------------------------
+
 function getProject(id) {
   return new Promise(function (resolve, reject) {
     connection.query(
@@ -154,7 +178,6 @@ function getProjects() {
   });
 }
 
-
 // --------------------------------------------------
 function getDomainsForProject(project) {
   return new Promise(function (resolve, reject) {
@@ -176,12 +199,10 @@ function getDomainsForProject(project) {
   });
 }
 
-
 // --------------------------------------------------
 function getDomainsForProjects(projects) {
   return Promise.all(projects.map(getDomainsForProject));
 }
-
 
 // --------------------------------------------------
 function getInvestigatorsForProject(project) {
@@ -204,12 +225,10 @@ function getInvestigatorsForProject(project) {
   });
 }
 
-
 // --------------------------------------------------
 function getInvestigatorsForProjects(projects) {
   return Promise.all(projects.map(getInvestigatorsForProject));
 }
-
 
 // --------------------------------------------------
 function getPublicationsForProject(project) {
@@ -255,7 +274,6 @@ function getSample(id) {
   });
 }
 
-
 // --------------------------------------------------
 function getSearchResults(query) {
   return new Promise(function (resolve, reject) {
@@ -275,7 +293,6 @@ function getSearchResults(query) {
     );
   });
 }
-
 
 // --------------------------------------------------
 /* FIXME desired query is below, file count was removed due to error
