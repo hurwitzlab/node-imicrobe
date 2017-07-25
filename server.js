@@ -54,8 +54,7 @@ process.on('uncaughtException', function (err) {
 // --------------------------------------------------
 // Routes
 // --------------------------------------------------
-//app.use(cors());
-//
+
 //app.get('/investigators/:id(\\d+)', function (req, res) {
 //  var id = req.params.id;
 //  console.log("/investigators/" + id);
@@ -133,7 +132,7 @@ process.on('uncaughtException', function (err) {
 //  connectMongo()
 //    .then((db)   => getMetaSearchResults(db, req.body))
 //    .then((data) => res.json(data))
-//    .catch((err) => res.status(500).send(err));
+//    .catch((err) => res.status(500).send("Err: " + err));
 //});
 //
 //// --------------------------------------------------
@@ -143,6 +142,20 @@ process.on('uncaughtException', function (err) {
 //    .then((db)   => getSampleKeys(db))
 //    .then((data) => res.json(data))
 //    .catch((err) => res.status(500).send(err));
+//});
+//
+//
+//// --------------------------------------------------
+//app.get('/search_param_values/:param', function (req, res) {
+//  var param = req.params.param;
+//  console.log("/search_param_values/" + param);
+//
+//  connectMongo()
+//    .then(db =>
+//      Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param)]))
+//      .then(filterMetaParamValues)
+//      .then(data => res.json({[param]: data}))
+//      .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
 //});
 //
 //
@@ -168,12 +181,12 @@ process.on('uncaughtException', function (err) {
 //app.get('*', function(req, res){
 //  res.status(500).send("Unknown route: " + req.path);
 //});
-//
-//
-//// --------------------------------------------------
-//// Database Queries
-//// --------------------------------------------------
-//
+
+
+// --------------------------------------------------
+// Database Queries
+// --------------------------------------------------
+
 //function getProject(id) {
 //  return new Promise(function (resolve, reject) {
 //    connection.query(
@@ -189,6 +202,7 @@ process.on('uncaughtException', function (err) {
 //    );
 //  });
 //}
+//
 //
 //// --------------------------------------------------
 //function getInvestigators() {
@@ -355,6 +369,7 @@ process.on('uncaughtException', function (err) {
 //  });
 //}
 //
+//
 //// --------------------------------------------------
 //function getSamplesForProject(project) {
 //  return new Promise(function (resolve, reject) {
@@ -376,6 +391,7 @@ process.on('uncaughtException', function (err) {
 //    );
 //  });
 //}
+//
 //
 //// --------------------------------------------------
 //function getInvestigator(id) {
@@ -413,6 +429,7 @@ process.on('uncaughtException', function (err) {
 //    );
 //  });
 //}
+//
 //
 //// --------------------------------------------------
 //function getSamplesForInvestigator(investigator) {
@@ -457,6 +474,7 @@ process.on('uncaughtException', function (err) {
 //  });
 //}
 //
+//
 //// --------------------------------------------------
 //function getOntologiesForSample(sample) {
 //  return new Promise(function (resolve, reject) {
@@ -479,10 +497,11 @@ process.on('uncaughtException', function (err) {
 //  });
 //}
 //
+//
 //// --------------------------------------------------
 //function connectMongo() {
 //  return new Promise(function (resolve, reject) {
-//    MongoClient.connect(config.mongo.url, (err, db) => {
+//    MongoClient.connect(MONGO_URL, (err, db) => {
 //      if (err)
 //        reject(err)
 //      else
@@ -491,8 +510,9 @@ process.on('uncaughtException', function (err) {
 //  });
 //}
 //
+//
 //// --------------------------------------------------
-//function getSampleKeys(db) {
+//function getSampleKeys(db, optField) {
 //  /*
 //   * Keys look like this:
 //   *
@@ -509,7 +529,11 @@ process.on('uncaughtException', function (err) {
 //   */
 //  return new Promise(function (resolve, reject) {
 //    var col = db.collection('sampleKeys');
-//    col.find().toArray(function(err, docs) {
+//    var qry = ((typeof(optField) != "undefined") && (optField != ""))
+//              ? { _id: { key: optField } }
+//              : {};
+//
+//    col.find(qry).toArray(function(err, docs) {
 //      if (err)
 //        reject(err);
 //      else {
@@ -525,19 +549,79 @@ process.on('uncaughtException', function (err) {
 //          acc[name] = type.toLowerCase();
 //          return acc;
 //        }, {});
+//
 //        resolve(keys);
 //      }
 //    });
 //  });
 //}
 //
+//
+//// --------------------------------------------------
+//function getMetaParamValues(db, fieldName, dataType) {
+//  return new Promise(function (resolve, reject) {
+//    db.command(
+//      { distinct: "sample", key: fieldName, query: {} },
+//      function (err, res) {
+//        if (!err && res.ok)
+//          resolve(res['values'])
+//        else
+//          reject(err)
+//      }
+//    );
+//  });
+//}
+//
+//
+//// --------------------------------------------------
+//function filterMetaParamValues(args) {
+//  var [dataType, data] = args
+//
+//  var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
+//             ? Object.values(dataType)[0]
+//             : undefined;
+//
+//  var f = function (val) { return type ? typeof(val) == type : true }
+//  var sorter = type == 'number'
+//    ? undefined
+//    : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
+//
+//  return Promise.resolve(data.filter(f).sort(sorter));
+//}
+//
+//
 //// --------------------------------------------------
 //function getMetaSearchResults(db, query) {
 //  return new Promise(function (resolve, reject) {
 //    if (typeof(query) == "object" && Object.keys(query).length > 0) {
 //
-//      qry = query
-//      db.collection('sample').find(query).toArray(
+//      var qry = Object.keys(query).reduce(
+//        (acc, key) => {
+//          var val = query[key]
+//
+//          // e.g., { min__biological__chlorophyll: 1 }
+//          if (key.match(/^(min|max)__/)) {
+//            var prefix = key.substr(0, 3)
+//            var param  = key.substr(5)
+//
+//            if (acc[param] == undefined)
+//              acc[param] = {}
+//
+//            var op = prefix == 'min' ? '$gte' : '$lte'
+//            acc[param][op] = val
+//          }
+//          // e.g., { environment__general_weather: "cloudy" }
+//          else
+//            acc[key] = val
+//
+//          return acc
+//        },
+//        {}
+//      );
+//
+//      var project = { "text" : 0 }
+//
+//      db.collection('sample').find(qry, project).toArray(
 //        function(err, docs) {
 //          if (err) reject(err)
 //          resolve(docs)
