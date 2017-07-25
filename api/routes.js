@@ -108,7 +108,7 @@ module.exports = function(app) {
     });
 
     app.get('/search_param_values/:param', function (request, response) {
-        var param = req.params.param;
+        var param = request.params.param;
         console.log("/search_param_values/" + param);
 
         mongo()
