@@ -2,16 +2,15 @@
 
 const express   = require('express');
 const app       = express();
-const MONGO_URL = 'mongodb://localhost:27017/imicrobe';
 var assert      = require('assert');
 var bodyParser  = require('body-parser');
 var cluster     = require('cluster');
-var config      = require('./config.json');
 var cors        = require('cors');
 var jsonParser  = bodyParser.json();
 var MongoClient = require('mongodb').MongoClient;
 var printf      = require('printf');
 var Promise     = require('promise');
+
 
 // Load config file
 var config = require('./config.json');
@@ -43,7 +42,7 @@ else {
     });
 }
 
-// Global uncaught except handler
+// Global uncaught exception handler
 process.on('uncaughtException', function (err) {
     console.error((new Date).toUTCString() + ' uncaughtException:', err.message)
     console.error(err.stack)
@@ -193,7 +192,6 @@ function getProject(id) {
     );
   });
 }
-
 
 // --------------------------------------------------
 function getInvestigators() {
@@ -360,7 +358,6 @@ function getSamples() {
   });
 }
 
-
 // --------------------------------------------------
 function getSamplesForProject(project) {
   return new Promise(function (resolve, reject) {
@@ -382,7 +379,6 @@ function getSamplesForProject(project) {
     );
   });
 }
-
 
 // --------------------------------------------------
 function getInvestigator(id) {
@@ -420,7 +416,6 @@ function getProjectsForInvestigator(investigator) {
     );
   });
 }
-
 
 // --------------------------------------------------
 function getSamplesForInvestigator(investigator) {
@@ -465,7 +460,6 @@ function getFilesForSample(sample) {
   });
 }
 
-
 // --------------------------------------------------
 function getOntologiesForSample(sample) {
   return new Promise(function (resolve, reject) {
@@ -488,11 +482,10 @@ function getOntologiesForSample(sample) {
   });
 }
 
-
 // --------------------------------------------------
 function connectMongo() {
   return new Promise(function (resolve, reject) {
-    MongoClient.connect(MONGO_URL, (err, db) => {
+    MongoClient.connect(config.mongo.url, (err, db) => {
       if (err)
         reject(err)
       else 
@@ -500,7 +493,6 @@ function connectMongo() {
     });
   });
 }
-
 
 // --------------------------------------------------
 function getSampleKeys(db) {
@@ -541,7 +533,6 @@ function getSampleKeys(db) {
     });
   });
 }
-
 
 // --------------------------------------------------
 function getMetaSearchResults(db, query) {
