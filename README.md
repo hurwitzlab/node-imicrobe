@@ -5,6 +5,7 @@ To bring up:
     $ npm install
     $ npm start
 
-# Author
+# Authors
 
 Ken Youens-Clark
+Matt Bomhoff
