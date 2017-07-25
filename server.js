@@ -1,15 +1,8 @@
 'use strict';
 
 var assert      = require('assert');
-var bodyParser  = require('body-parser');
 var cluster     = require('cluster');
-var cors        = require('cors');
-var jsonParser  = bodyParser.json();
-var MongoClient = require('mongodb').MongoClient;
-var printf      = require('printf');
-var Promise     = require('promise');
 var express = require('express');
-
 
 // Load config file
 var config = require('./config.json');
@@ -158,15 +151,6 @@ process.on('uncaughtException', function (err) {
 //      .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
 //});
 //
-//
-//// --------------------------------------------------
-//app.get('/search/:query', function (req, res) {
-//  var query = req.params.query;
-//  console.log("/search/" + query);
-//  getSearchResults(query)
-//    .then((data) => res.json(data))
-//    .catch((err) => res.status(500).send(err));
-//});
 //
 //// --------------------------------------------------
 //app.get('/', function(req, res){
