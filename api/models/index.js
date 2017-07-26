@@ -27,12 +27,12 @@ module.exports = models;
  */
 
 // project <-> investigator
-models.project.belongsToMany(models.investigator, { through: models.project_to_investigator, foreignKey: 'investigator_id' });
-models.investigator.belongsToMany(models.project, { through: models.project_to_investigator, foreignKey: 'project_id' });
+models.project.belongsToMany(models.investigator, { through: models.project_to_investigator, foreignKey: 'project_id' });
+models.investigator.belongsToMany(models.project, { through: models.project_to_investigator, foreignKey: 'investigator_id' });
 
 // project <-> domain
-models.project.belongsToMany(models.domain, { through: models.project_to_domain, foreignKey: 'domain_id' });
-models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'project_id' });
+models.project.belongsToMany(models.domain, { through: models.project_to_domain, foreignKey: 'project_id' });
+models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'domain_id' });
 
 // project <- publication
 models.project.hasMany(models.publication, { foreignKey: 'project_id' });
@@ -41,12 +41,12 @@ models.project.hasMany(models.publication, { foreignKey: 'project_id' });
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
 
 // sample <-> investigator
-models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'investigator_id' });
-models.investigator.belongsToMany(models.sample, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
+models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
+models.investigator.belongsToMany(models.sample, { through: models.sample_to_investigator, foreignKey: 'investigator_id' });
 
 // sample <-> ontology
-models.sample.belongsToMany(models.ontology, { through: models.sample_to_ontology, foreignKey: 'ontology_id' });
-models.ontology.belongsToMany(models.sample, { through: models.sample_to_ontology, foreignKey: 'sample_id' });
+models.sample.belongsToMany(models.ontology, { through: models.sample_to_ontology, foreignKey: 'sample_id' });
+models.ontology.belongsToMany(models.sample, { through: models.sample_to_ontology, foreignKey: 'ontology_id' });
 
 // sample <- sample_file
 models.sample.hasMany(models.sample_file, { foreignKey: 'sample_file_id' });
