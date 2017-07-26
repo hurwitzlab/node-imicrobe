@@ -151,13 +151,13 @@ app.get('/search_params', function (req, res) {
 
 
 // --------------------------------------------------
-app.get('/search_param_values/:param', function (req, res) {
-  var param = req.params.param;
-  console.log("/search_param_values/" + param);
+app.post('/search_param_values', jsonParser, function (req, res) {
+  var param = req.body.param;
+  var query = req.body.query;
 
   connectMongo()
     .then(db => 
-      Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param)]))
+      Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
       .then(filterMetaParamValues)
       .then(data => res.json({[param]: data}))
       .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
@@ -563,10 +563,15 @@ function getSampleKeys(db, optField) {
 
 
 // --------------------------------------------------
-function getMetaParamValues(db, fieldName, dataType) {
+function getMetaParamValues(db, fieldName, query) {
+  if (typeof(query) == "undefined") 
+    query = {}
+
+  var qry = fixQuery(query);
+
   return new Promise(function (resolve, reject) {
     db.command(
-      { distinct: "sample", key: fieldName, query: {} }, 
+      { distinct: "sample", key: fieldName, query: qry }, 
       function (err, res) {
         if (!err && res.ok) 
           resolve(res['values'])
@@ -588,7 +593,7 @@ function filterMetaParamValues(args) {
 
   var f = function (val) { return type ? typeof(val) == type : true }
   var sorter = type == 'number' 
-    ? undefined
+    ? function (a, b) { return a - b }
     : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
 
   return Promise.resolve(data.filter(f).sort(sorter));
@@ -596,34 +601,48 @@ function filterMetaParamValues(args) {
 
 
 // --------------------------------------------------
+function fixQuery(query) {
+  return Object.keys(query)
+    .filter(x => { return !(query[x] == null || query[x].length == 0) })
+    .reduce(
+    (acc, key) => {
+      var val = query[key]
+
+      // e.g., { min__biological__chlorophyll: 1 }
+      if (key.match(/^(min|max)__/)) {
+        var prefix = key.substr(0, 3)
+        var param  = key.substr(5)
+
+        if (acc[param] == undefined)
+          acc[param] = {}
+
+        var op = prefix == 'min' ? '$gte' : '$lte'
+        acc[param][op] = val
+      }
+      // e.g., { environment__general_weather: "cloudy" }
+      else if (Array.isArray(val)) {
+        if (acc[key] == undefined)
+          acc[key] = {}
+
+        acc[key]['$in'] = val 
+      }
+      else
+        acc[key] = val
+
+      return acc
+    },
+    {}
+  );
+}
+
+
+// --------------------------------------------------
 function getMetaSearchResults(db, query) {
   return new Promise(function (resolve, reject) {
     if (typeof(query) == "object" && Object.keys(query).length > 0) {
+      var qry = fixQuery(query);
 
-      var qry = Object.keys(query).reduce(
-        (acc, key) => {
-          var val = query[key]
-
-          // e.g., { min__biological__chlorophyll: 1 }
-          if (key.match(/^(min|max)__/)) {
-            var prefix = key.substr(0, 3)
-            var param  = key.substr(5)
-
-            if (acc[param] == undefined)
-              acc[param] = {}
-
-            var op = prefix == 'min' ? '$gte' : '$lte'
-            acc[param][op] = val
-          }
-          // e.g., { environment__general_weather: "cloudy" }
-          else
-            acc[key] = val
-
-          return acc
-        },
-        {}
-      );
-
+      // I don't want the "text" field in the projection
       var project = { "text" : 0 }
 
       db.collection('sample').find(qry, project).toArray(
