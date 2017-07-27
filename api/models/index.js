@@ -40,6 +40,9 @@ models.project.hasMany(models.publication, { foreignKey: 'project_id' });
 // project <- sample
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
 
+// sample -> project
+models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
+
 // sample <-> investigator
 models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
 models.investigator.belongsToMany(models.sample, { through: models.sample_to_investigator, foreignKey: 'investigator_id' });

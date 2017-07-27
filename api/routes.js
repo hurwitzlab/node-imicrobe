@@ -1,13 +1,13 @@
 'use strict';
 
-var printf = require('printf');
-var cors = require('cors');
-var Promise = require('promise');
-var bodyParser  = require('body-parser');
-var jsonParser  = bodyParser.json();
-var mongo = require('../config/mongo').mongo;
-var sequelize = require('../config/mysql').sequelize;
-var models = require('./models/index');
+var printf     = require('printf');
+var cors       = require('cors');
+var Promise    = require('promise');
+var bodyParser = require('body-parser');
+var jsonParser = bodyParser.json();
+var mongo      = require('../config/mongo').mongo;
+var sequelize  = require('../config/mysql').sequelize;
+var models     = require('./models/index');
 
 module.exports = function(app) {
     app.use(cors());
@@ -76,6 +76,7 @@ module.exports = function(app) {
         models.sample.findOne({
             where: { sample_id: id },
             include: [
+                { model: models.project },
                 { model: models.investigator },
                 { model: models.sample_file },
                 { model: models.ontology }
@@ -87,7 +88,20 @@ module.exports = function(app) {
     app.get('/samples', function(request, response) {
         console.log('/samples');
 
-        models.sample.findAll()
+        models.sample.findAll({ 
+          attributes: 
+            [ 'sample_id'
+            , 'sample_name'
+            , 'sample_acc'
+            , 'sample_type'
+            , 'project_id' 
+            ],
+          include: [ 
+            { model: models.project
+            , attributes: [ 'project_id', 'project_name' ]
+            } 
+          ] 
+        })
         .then( sample => response.json(sample) );
     });
 
@@ -143,11 +157,9 @@ function getSearchResults(query) {
         `,
         sequelize.getQueryInterface().escape(query)
       ),
-      function (error, results, fields) {
-        if (error) return reject(err);
-        resolve(results);
-      }
-    );
+      { type: sequelize.QueryTypes.SELECT }
+    )
+    .then(results => resolve(results));
   });
 }
 
@@ -171,6 +183,7 @@ function getSampleKeys(db, optField) {
     var qry = ((typeof(optField) != "undefined") && (optField != ""))
               ? { _id: { key: optField } }
               : {};
+    console.log(qry);
 
     col.find(qry).toArray(function(err, docs) {
       if (err)
