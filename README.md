@@ -1,10 +1,14 @@
 # node-imicrobe
 
-To bring up:
+This is a rewrite of [imicrobe-mojo](https://github.com/hurwitzlab/imicrobe-mojo) using Node.js.
+
+To run:
 
     $ npm install
     $ npm start
 
-# Author
+# Authors
 
 Ken Youens-Clark
+
+Matt Bomhoff

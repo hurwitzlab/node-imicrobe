@@ -567,7 +567,7 @@ function getMetaParamValues(db, fieldName, query) {
   if (typeof(query) == "undefined") 
     query = {}
 
-  var qry = fixQuery(query);
+  var qry = fixMongoQuery(query);
 
   return new Promise(function (resolve, reject) {
     db.command(
@@ -601,7 +601,7 @@ function filterMetaParamValues(args) {
 
 
 // --------------------------------------------------
-function fixQuery(query) {
+function fixMongoQuery(query) {
   return Object.keys(query)
     .filter(x => { return !(query[x] == null || query[x].length == 0) })
     .reduce(
@@ -640,7 +640,7 @@ function fixQuery(query) {
 function getMetaSearchResults(db, query) {
   return new Promise(function (resolve, reject) {
     if (typeof(query) == "object" && Object.keys(query).length > 0) {
-      var qry = fixQuery(query);
+      var qry = fixMongoQuery(query);
 
       // I don't want the "text" field in the projection
       var project = { "text" : 0 }
