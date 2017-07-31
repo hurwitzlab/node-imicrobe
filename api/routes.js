@@ -12,6 +12,34 @@ var models     = require('./models/index');
 module.exports = function(app) {
     app.use(cors());
 
+    app.get('/domains', function(request, response) {
+        console.log('/domains');
+
+        models.domain.findAll({
+            include: [
+                { model: models.project 
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+    app.get('/domains/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/domains/' + id);
+
+        models.domain.findOne({
+            where: { domain_id: id },
+            include: [
+                { model: models.project 
+                , attributes : [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( investigator => response.json(investigator) );
+    });
+
     app.get('/investigators/:id(\\d+)', function(request, response) {
         var id = request.params.id;
         console.log('/investigators/' + id);
@@ -33,6 +61,34 @@ module.exports = function(app) {
         .then( investigator => response.json(investigator) );
     });
 
+    app.get('/project_groups', function(request, response) {
+        console.log('/project_groups');
+
+        models.project_group.findAll({
+            include: [
+                { model: models.project 
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    })
+
+    app.get('/project_groups/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/project_groups/' + id);
+
+        models.project_group.findOne({
+            where: { project_group_id: id },
+            include: [
+                { model: models.project 
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
     app.get('/projects/:id(\\d+)', function(request, response) {
         var id = request.params.id;
         console.log('/projects/' + id);
@@ -43,7 +99,10 @@ module.exports = function(app) {
                 { model: models.investigator },
                 { model: models.domain },
                 { model: models.publication },
-                { model: models.sample }
+                { model: models.sample },
+                { model: models.project_group
+                , attributes: [ 'project_group_id', 'group_name' ]
+                }
             ]
         })
         .then( project => response.json(project) );
@@ -59,6 +118,34 @@ module.exports = function(app) {
             ]
         })
         .then( project => response.json(project) );
+    });
+
+    app.get('/publications', function(request, response) {
+        console.log('/publications');
+
+        models.publication.findAll({
+            attributes: [ 'publication_id', 'title', 'author' ],
+            include: [
+                { model: models.project 
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+
+    app.get('/publications/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/publications/' + id);
+
+        models.publication.findOne({
+            where: { publication_id: id },
+            include: [
+                { model: models.project }
+            ]
+        })
+        .then( data => response.json(data) );
     });
 
     app.get('/search/:query', function (request, response) {

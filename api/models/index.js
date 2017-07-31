@@ -30,12 +30,19 @@ module.exports = models;
 models.project.belongsToMany(models.investigator, { through: models.project_to_investigator, foreignKey: 'project_id' });
 models.investigator.belongsToMany(models.project, { through: models.project_to_investigator, foreignKey: 'investigator_id' });
 
+// project <-> investigator
+models.project.belongsToMany(models.project_group, { through: models.project_to_project_group, foreignKey: 'project_id' });
+models.project_group.belongsToMany(models.project, { through: models.project_to_project_group, foreignKey: 'project_group_id' });
+
 // project <-> domain
 models.project.belongsToMany(models.domain, { through: models.project_to_domain, foreignKey: 'project_id' });
 models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'domain_id' });
 
 // project <- publication
 models.project.hasMany(models.publication, { foreignKey: 'project_id' });
+
+// publication -> project
+models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // project <- sample
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
