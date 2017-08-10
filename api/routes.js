@@ -12,6 +12,68 @@ var models     = require('./models/index');
 module.exports = function(app) {
     app.use(cors());
 
+    app.get('/assemblies', function(request, response) {
+        console.log('/assemblies');
+
+        models.assembly.findAll({
+            include: [
+                { model: models.project
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+    app.get('/assemblies/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/assemblies/' + id);
+
+        models.assembly.findOne({
+            where: { assembly_id: id },
+            include: [
+                { model: models.project
+                , attributes : [ 'project_id', 'project_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+    app.get('/combined_assemblies', function(request, response) {
+        console.log('/combined_assemblies');
+
+        models.combined_assembly.findAll({
+            include: [
+                { model: models.project
+                , attributes: [ 'project_id', 'project_name' ]
+                },
+                { model: models.sample
+                , attributes: [ 'sample_id', 'sample_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+    app.get('/combined_assemblies/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/combined_assemblies/' + id);
+
+        models.combined_assembly.findOne({
+            where: { combined_assembly_id: id },
+            include: [
+                { model: models.project
+                , attributes : [ 'project_id', 'project_name' ]
+                },
+                { model: models.sample
+                , attributes: [ 'sample_id', 'sample_name' ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
     app.get('/domains', function(request, response) {
         console.log('/domains');
 
@@ -37,7 +99,7 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( investigator => response.json(investigator) );
+        .then( data => response.json(data) );
     });
 
     app.get('/investigators/:id(\\d+)', function(request, response) {
@@ -212,7 +274,7 @@ module.exports = function(app) {
       var param = req.body.param;
       var query = req.body.query;
 
-      connectMongo()
+      mongo()
         .then(db =>
           Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
           .then(filterMetaParamValues)

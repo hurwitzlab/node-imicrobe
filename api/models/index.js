@@ -41,14 +41,26 @@ models.domain.belongsToMany(models.project, { through: models.project_to_domain,
 // project <- publication
 models.project.hasMany(models.publication, { foreignKey: 'project_id' });
 
+// project <- assembly
+models.project.hasMany(models.assembly, { foreignKey: 'project_id' });
+
+// project <- combined_assembly
+models.project.hasMany(models.combined_assembly, { foreignKey: 'project_id' });
+
 // publication -> project
-models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
+models.publication.belongsTo(models.project, { foreignKey: 'publication_id' });
+
+// assembly -> project
+models.assembly.belongsTo(models.project, { foreignKey: 'assembly_id' });
+
+// combined_assembly -> project
+models.combined_assembly.belongsTo(models.project, { foreignKey: 'combined_assembly_id' });
 
 // project <- sample
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
 
 // sample -> project
-models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
+models.sample.belongsTo(models.project, { foreignKey: 'sample_id' });
 
 // sample <-> investigator
 models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
@@ -57,6 +69,10 @@ models.investigator.belongsToMany(models.sample, { through: models.sample_to_inv
 // sample <-> ontology
 models.sample.belongsToMany(models.ontology, { through: models.sample_to_ontology, foreignKey: 'sample_id' });
 models.ontology.belongsToMany(models.sample, { through: models.sample_to_ontology, foreignKey: 'ontology_id' });
+
+// sample <-> combined_assembly
+models.sample.belongsToMany(models.combined_assembly, { through: models.combined_assembly_to_sample, foreignKey: 'sample_id' });
+models.combined_assembly.belongsToMany(models.sample, { through: models.combined_assembly_to_sample, foreignKey: 'combined_assembly_id' });
 
 // sample <- sample_file
 models.sample.hasMany(models.sample_file, { foreignKey: 'sample_file_id' });
