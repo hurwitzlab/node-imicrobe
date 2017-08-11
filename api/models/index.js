@@ -39,28 +39,28 @@ models.project.belongsToMany(models.domain, { through: models.project_to_domain,
 models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'domain_id' });
 
 // project <- publication
-models.project.hasMany(models.publication, { foreignKey: 'project_id' });
+models.project.hasMany(models.publication, { foreignKey: 'publication_id' });
 
 // project <- assembly
-models.project.hasMany(models.assembly, { foreignKey: 'project_id' });
+models.project.hasMany(models.assembly, { foreignKey: 'assembly_id' });
 
 // project <- combined_assembly
-models.project.hasMany(models.combined_assembly, { foreignKey: 'project_id' });
+models.project.hasMany(models.combined_assembly, { foreignKey: 'combined_assembly_id' });
 
 // publication -> project
-models.publication.belongsTo(models.project, { foreignKey: 'publication_id' });
+models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // assembly -> project
-models.assembly.belongsTo(models.project, { foreignKey: 'assembly_id' });
+models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // combined_assembly -> project
-models.combined_assembly.belongsTo(models.project, { foreignKey: 'combined_assembly_id' });
+models.combined_assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // project <- sample
-models.project.hasMany(models.sample, { foreignKey: 'project_id' });
+models.project.hasMany(models.sample, { foreignKey: 'sample_id' });
 
 // sample -> project
-models.sample.belongsTo(models.project, { foreignKey: 'sample_id' });
+models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // sample <-> investigator
 models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
