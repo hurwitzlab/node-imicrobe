@@ -273,6 +273,7 @@ module.exports = function(app) {
     app.post('/search_param_values', jsonParser, function (req, res) {
       var param = req.body.param;
       var query = req.body.query;
+      console.log("/search_params for " + param);
 
       mongo()
         .then(db =>
