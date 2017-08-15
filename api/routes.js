@@ -12,6 +12,28 @@ var models     = require('./models/index');
 module.exports = function(app) {
     app.use(cors());
 
+    app.get('/apps', function(request, response) {
+        console.log('/apps');
+
+        models.app.findAll()
+        .then( data => response.json(data) );
+    });
+
+    app.get('/apps/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('/app/' + id);
+
+        models.app.findOne({
+            where: { app_id: id },
+//            include: [
+//                { model: models.project
+//                , attributes : [ 'project_id', 'project_name' ]
+//                }
+//            ]
+        })
+        .then( data => response.json(data) );
+    });
+
     app.get('/assemblies', function(request, response) {
         console.log('/assemblies');
 
