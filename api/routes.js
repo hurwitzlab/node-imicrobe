@@ -242,7 +242,7 @@ module.exports = function(app) {
 
     app.get('/samples/:id(\\d+)', function (request, response) {
         var id = request.params.id;
-        console.log("/samples/" + id);
+        console.log('/samples/' + id);
 
         models.sample.findOne({
             where: { sample_id: id },
@@ -257,22 +257,29 @@ module.exports = function(app) {
     });
 
     app.get('/samples', function(request, response) {
-        console.log('/samples');
+        console.log('/samples', request.query);
 
-        models.sample.findAll({ 
-          attributes: 
-            [ 'sample_id'
-            , 'sample_name'
-            , 'sample_acc'
-            , 'sample_type'
-            , 'project_id' 
-            ],
-          include: [ 
-            { model: models.project
-            , attributes: [ 'project_id', 'project_name' ]
-            } 
-          ] 
-        })
+        var params = {
+            attributes:
+                [ 'sample_id'
+                , 'sample_name'
+                , 'sample_acc'
+                , 'sample_type'
+                , 'project_id'
+                ],
+            include: [
+                { model: models.project
+                , attributes: [ 'project_id', 'project_name' ]
+                }
+            ]
+        };
+
+        if (typeof request.query.id !== 'undefined') {
+            var ids = request.query.id.split(',');
+            params.where = { sample_id: { in: ids } };
+        }
+
+        models.sample.findAll(params)
         .then( sample => response.json(sample) );
     });
 
