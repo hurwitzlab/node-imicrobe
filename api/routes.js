@@ -283,8 +283,36 @@ module.exports = function(app) {
         .then( sample => response.json(sample) );
     });
 
-    app.post('/samplesearch', jsonParser, function (request, response) {
-        console.log("/samplesearch");
+    app.get('/samples/files', function(request, response) {
+        console.log('/samples/files', request.query);
+
+        var params = {
+            attributes:
+                [ 'sample_file_id'
+                , 'sample_id'
+                , 'file'
+                ],
+            include: [
+                { model: models.sample
+                , attributes: [ 'sample_id', 'sample_name' ]
+                },
+                { model: models.sample_file_type
+                , attributes: [ 'sample_file_type_id', 'type' ]
+                }
+            ]
+        };
+
+        if (typeof request.query.id !== 'undefined') {
+            var ids = request.query.id.split(',');
+            params.where = { sample_id: { in: ids } };
+        }
+
+        models.sample_file.findAll(params)
+        .then( sample => response.json(sample) );
+    });
+
+    app.post('/samples/search', jsonParser, function (request, response) {
+        console.log("/samples/search");
         mongo()
         .then((db)   => getMetaSearchResults(db, request.body))
         .then((data) => response.json(data))
