@@ -80,3 +80,7 @@ models.sample_file.belongsTo(models.sample, { foreignKey: 'sample_id' });
 
 // sample_file <- sample_file_type
 models.sample_file.belongsTo(models.sample_file_type, { foreignKey: 'sample_file_type_id' });
+
+// app <- app_run
+models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
+models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });

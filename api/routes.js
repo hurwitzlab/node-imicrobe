@@ -26,8 +26,7 @@ module.exports = function(app) {
         models.app.findOne({
             where: { app_id: id },
 //            include: [
-//                { model: models.project
-//                , attributes : [ 'project_id', 'project_name' ]
+//                { model: models.app_run
 //                }
 //            ]
         })
