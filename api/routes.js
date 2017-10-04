@@ -169,6 +169,32 @@ module.exports = function(app) {
         .then( investigator => response.json(investigator) );
     });
 
+    app.post('/login', function(request, response) {
+        console.log('POST /login');
+
+        var user_name = request.body.user_name;
+        if (!user_name) {
+            console.log('Error: missing required field');
+            response.json({});
+            return;
+        }
+        console.log('username = ' + user_name);
+
+        models.user.findOrCreate({
+            where: { user_name: user_name }
+        })
+        .spread( (user, created) => {
+            models.login.create({
+                user_id: user.user_id,
+                login_date: sequelize.fn('NOW'),
+            })
+            .then( login => response.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
+                login_id: login.login_id,
+                user_id: login.user_id
+            }) );
+        });
+    });
+
     app.get('/project_groups', function(request, response) {
         console.log('GET /project_groups');
 
