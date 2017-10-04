@@ -11,9 +11,11 @@ var models     = require('./models/index');
 
 module.exports = function(app) {
     app.use(cors());
+    app.use(bodyParser.json()); // support json encoded bodies
+    app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
 
     app.get('/apps', function(request, response) {
-        console.log('/apps');
+        console.log('GET /apps');
 
         models.app.findAll()
         .then( data => response.json(data) );
@@ -21,7 +23,7 @@ module.exports = function(app) {
 
     app.get('/apps/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/app/' + id);
+        console.log('GET /apps/' + id);
 
         models.app.findOne({
             where: { app_id: id },
@@ -33,8 +35,31 @@ module.exports = function(app) {
         .then( data => response.json(data) );
     });
 
+    app.post('/apps/run', function(request, response) {
+        console.log('POST /apps/run');
+        console.log(request.body);
+
+        var app_id = request.body.app_id;
+        var user_id = request.body.user_id;
+        var params = request.body.params;
+
+        if (!app_id || !user_id) {
+            console.log('Error: missing required field');
+            response.json({});
+            return;
+        }
+
+        models.app_run.create({
+            app_id: app_id,
+            user_id: user_id,
+            app_ran_at: sequelize.fn('NOW'),
+            params: params
+        })
+        .then( app_run => response.json(app_run) );
+    });
+
     app.get('/assemblies', function(request, response) {
-        console.log('/assemblies');
+        console.log('GET /assemblies');
 
         models.assembly.findAll({
             include: [
@@ -48,7 +73,7 @@ module.exports = function(app) {
 
     app.get('/assemblies/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/assemblies/' + id);
+        console.log('GET /assemblies/' + id);
 
         models.assembly.findOne({
             where: { assembly_id: id },
@@ -62,7 +87,7 @@ module.exports = function(app) {
     });
 
     app.get('/combined_assemblies', function(request, response) {
-        console.log('/combined_assemblies');
+        console.log('GET /combined_assemblies');
 
         models.combined_assembly.findAll({
             include: [
@@ -79,7 +104,7 @@ module.exports = function(app) {
 
     app.get('/combined_assemblies/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/combined_assemblies/' + id);
+        console.log('GET /combined_assemblies/' + id);
 
         models.combined_assembly.findOne({
             where: { combined_assembly_id: id },
@@ -96,7 +121,7 @@ module.exports = function(app) {
     });
 
     app.get('/domains', function(request, response) {
-        console.log('/domains');
+        console.log('GET /domains');
 
         models.domain.findAll({
             include: [
@@ -110,7 +135,7 @@ module.exports = function(app) {
 
     app.get('/domains/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/domains/' + id);
+        console.log('GET /domains/' + id);
 
         models.domain.findOne({
             where: { domain_id: id },
@@ -125,7 +150,7 @@ module.exports = function(app) {
 
     app.get('/investigators/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/investigators/' + id);
+        console.log('GET /investigators/' + id);
 
         models.investigator.findOne({
             where: { investigator_id: id },
@@ -138,14 +163,14 @@ module.exports = function(app) {
     });
 
     app.get('/investigators', function(request, response) {
-        console.log('/investigators');
+        console.log('GET /investigators');
 
         models.investigator.findAll()
         .then( investigator => response.json(investigator) );
     });
 
     app.get('/project_groups', function(request, response) {
-        console.log('/project_groups');
+        console.log('GET /project_groups');
 
         models.project_group.findAll({
             include: [
@@ -159,7 +184,7 @@ module.exports = function(app) {
 
     app.get('/project_groups/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/project_groups/' + id);
+        console.log('GET /project_groups/' + id);
 
         models.project_group.findOne({
             where: { project_group_id: id },
@@ -174,7 +199,7 @@ module.exports = function(app) {
 
     app.get('/projects/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/projects/' + id);
+        console.log('GET /projects/' + id);
 
         models.project.findOne({
             where: { project_id: id },
@@ -192,7 +217,7 @@ module.exports = function(app) {
     });
 
     app.get('/projects', function(request, response) {
-        console.log('/projects');
+        console.log('GET /projects');
 
         models.project.findAll({
             include: [
@@ -204,7 +229,7 @@ module.exports = function(app) {
     });
 
     app.get('/publications', function(request, response) {
-        console.log('/publications');
+        console.log('GET /publications');
 
         models.publication.findAll({
             attributes: [ 'publication_id', 'title', 'author' ],
@@ -220,7 +245,7 @@ module.exports = function(app) {
 
     app.get('/publications/:id(\\d+)', function(request, response) {
         var id = request.params.id;
-        console.log('/publications/' + id);
+        console.log('GET /publications/' + id);
 
         models.publication.findOne({
             where: { publication_id: id },
@@ -233,7 +258,7 @@ module.exports = function(app) {
 
     app.get('/search/:query', function (request, response) {
         var query = request.params.query;
-        console.log("/search/" + query);
+        console.log("GET /search/" + query);
 
         getSearchResults(query)
         .then((data) => response.json(data));
@@ -241,7 +266,7 @@ module.exports = function(app) {
 
     app.get('/samples/:id(\\d+)', function (request, response) {
         var id = request.params.id;
-        console.log('/samples/' + id);
+        console.log('GET /samples/' + id);
 
         models.sample.findOne({
             where: { sample_id: id },
@@ -256,7 +281,7 @@ module.exports = function(app) {
     });
 
     app.get('/samples', function(request, response) {
-        console.log('/samples', request.query);
+        console.log('GET /samples', request.query);
 
         var params = {
             attributes:
@@ -283,7 +308,7 @@ module.exports = function(app) {
     });
 
     app.get('/samples/files', function(request, response) {
-        console.log('/samples/files', request.query);
+        console.log('GET /samples/files', request.query);
 
         var params = {
             attributes:
@@ -311,7 +336,7 @@ module.exports = function(app) {
     });
 
     app.post('/samples/search', jsonParser, function (request, response) {
-        console.log("/samples/search");
+        console.log("POST /samples/search");
         mongo()
         .then((db)   => getMetaSearchResults(db, request.body))
         .then((data) => response.json(data))
@@ -319,7 +344,7 @@ module.exports = function(app) {
     });
 
     app.get('/search_params', function (request, response) {
-        console.log("/search_params");
+        console.log("GET /search_params");
         mongo()
         .then((db)   => getSampleKeys(db))
         .then((data) => response.json(data))
@@ -329,7 +354,7 @@ module.exports = function(app) {
     app.post('/search_param_values', jsonParser, function (req, res) {
       var param = req.body.param;
       var query = req.body.query;
-      console.log("/search_params for " + param);
+      console.log("POST /search_params_values " + param);
 
       mongo()
         .then(db =>
@@ -339,7 +364,7 @@ module.exports = function(app) {
           .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
     });
 
-    app.get('/', function(request, response){
+    app.get('/', function(request, response) {
         var routes = app._router.stack        // registered routes
                      .filter(r => r.route)    // take out all the middleware
                      .map(r => r.route.path)
