@@ -19,8 +19,8 @@ module.exports = function(app) {
 
         models.app.findAll({
             include: [
-                { model: models.app_tag
-                }
+                { model: models.app_tag },
+                { model: models.app_data_type }
             ]
         })
         .then( data => response.json(data) );

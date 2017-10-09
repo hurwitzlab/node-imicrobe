@@ -88,3 +88,7 @@ models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });
 // app <-> app_tag
 models.app.belongsToMany(models.app_tag, { through: models.app_to_app_tag, foreignKey: 'app_id' });
 models.app_tag.belongsToMany(models.app, { through: models.app_to_app_tag, foreignKey: 'app_tag_id' });
+
+// app <-> app_data_type
+models.app.belongsToMany(models.app_data_type, { through: models.app_to_app_data_type, foreignKey: 'app_id' });
+models.app_data_type.belongsToMany(models.app, { through: models.app_to_app_data_type, foreignKey: 'app_data_type_id' });
