@@ -17,7 +17,12 @@ module.exports = function(app) {
     app.get('/apps', function(request, response) {
         console.log('GET /apps');
 
-        models.app.findAll()
+        models.app.findAll({
+            include: [
+                { model: models.app_tag
+                }
+            ]
+        })
         .then( data => response.json(data) );
     });
 

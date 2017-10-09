@@ -30,7 +30,7 @@ module.exports = models;
 models.project.belongsToMany(models.investigator, { through: models.project_to_investigator, foreignKey: 'project_id' });
 models.investigator.belongsToMany(models.project, { through: models.project_to_investigator, foreignKey: 'investigator_id' });
 
-// project <-> investigator
+// project <-> project group
 models.project.belongsToMany(models.project_group, { through: models.project_to_project_group, foreignKey: 'project_id' });
 models.project_group.belongsToMany(models.project, { through: models.project_to_project_group, foreignKey: 'project_group_id' });
 
@@ -84,3 +84,7 @@ models.sample_file.belongsTo(models.sample_file_type, { foreignKey: 'sample_file
 // app <- app_run
 models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
 models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });
+
+// app <-> app_tag
+models.app.belongsToMany(models.app_tag, { through: models.app_to_app_tag, foreignKey: 'app_id' });
+models.app_tag.belongsToMany(models.app, { through: models.app_to_app_tag, foreignKey: 'app_tag_id' });
