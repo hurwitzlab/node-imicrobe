@@ -295,6 +295,27 @@ module.exports = function(app) {
         .then((data) => response.json(data));
     });
 
+    app.get('/search_params', function (request, response) {
+        console.log("GET /search_params");
+        mongo()
+        .then((db)   => getSampleKeys(db))
+        .then((data) => response.json(data))
+        .catch((err) => response.status(500).send(err));
+    });
+
+    app.post('/search_param_values', jsonParser, function (request, response) {
+      var param = request.body.param;
+      var query = request.body.query;
+      console.log("POST /search_params_values " + param);
+
+      mongo()
+        .then(db =>
+          Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
+          .then(filterMetaParamValues)
+          .then(data => response.json({[param]: data}))
+          .catch(err => response.status(500).send("Error: " + JSON.stringify(err)));
+    });
+
     app.get('/samples/:id(\\d+)', function (request, response) {
         var id = request.params.id;
         console.log('GET /samples/' + id);
@@ -381,27 +402,6 @@ module.exports = function(app) {
         .catch((err) => response.status(500).send("Err: " + err));
     });
 
-    app.get('/search_params', function (request, response) {
-        console.log("GET /search_params");
-        mongo()
-        .then((db)   => getSampleKeys(db))
-        .then((data) => response.json(data))
-        .catch((err) => response.status(500).send(err));
-    });
-
-    app.post('/search_param_values', jsonParser, function (req, res) {
-      var param = req.body.param;
-      var query = req.body.query;
-      console.log("POST /search_params_values " + param);
-
-      mongo()
-        .then(db =>
-          Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
-          .then(filterMetaParamValues)
-          .then(data => res.json({[param]: data}))
-          .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
-    });
-
     app.get('/', function(request, response) {
         var routes = app._router.stack        // registered routes
                      .filter(r => r.route)    // take out all the middleware
@@ -420,7 +420,7 @@ function getSearchResults(query) {
     sequelize.query(
       printf(
         `
-        select table_name, primary_key as id, object_name as name
+        select table_name, primary_key as id
         from   search
         where  match (search_text) against (%s in boolean mode)
         `,
