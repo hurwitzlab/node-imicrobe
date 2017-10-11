@@ -81,6 +81,16 @@ models.sample_file.belongsTo(models.sample, { foreignKey: 'sample_id' });
 // sample_file <- sample_file_type
 models.sample_file.belongsTo(models.sample_file_type, { foreignKey: 'sample_file_type_id' });
 
+// sample <- sample_attr
+models.sample.hasMany(models.sample_attr, { foreignKey: 'sample_id' });
+models.sample_attr.belongsTo(models.sample, { foreignKey: 'sample_id' });
+
+// sample_attr -> sample_attr_type
+models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr_type_id' });
+
+// sample_attr_type -> sample_attr_type_alias
+models.sample_attr_type.hasMany(models.sample_attr_type_alias, { foreignKey: 'sample_attr_type_id' });
+
 // app <- app_run
 models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
 models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });

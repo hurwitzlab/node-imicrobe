@@ -305,7 +305,14 @@ module.exports = function(app) {
                 { model: models.project },
                 { model: models.investigator },
                 { model: models.sample_file },
-                { model: models.ontology }
+                { model: models.ontology },
+                { model: models.sample_attr,
+                  include: [
+                      { model: models.sample_attr_type,
+                        include: [ models.sample_attr_type_alias ]
+                      }
+                  ]
+                }
             ]
         })
         .then( sample => response.json(sample) );
