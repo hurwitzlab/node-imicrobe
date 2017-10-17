@@ -11,6 +11,10 @@ module.exports = function(sequelize, DataTypes) {
     name: {
       type: DataTypes.STRING(50),
       allowNull: false
+    },
+    alias: {
+      type: DataTypes.STRING(255),
+      allowNull: true
     }
   }, {
     tableName: 'app_data_type'
