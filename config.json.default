@@ -8,5 +8,6 @@
     "mongo": {
         "url": "mongodb://localhost:27017/imicrobe"
     },
-    "serverPort": 3006
+    "serverPort": 3006,
+    "supportEmail": ""
 }
