@@ -10,6 +10,9 @@ var mongo      = require('../config/mongo').mongo;
 var sequelize  = require('../config/mysql').sequelize;
 var models     = require('./models/index');
 
+// Load config file
+var config = require('../config.json');
+
 module.exports = function(app) {
     app.use(cors());
     app.use(bodyParser.json()); // support json encoded bodies
@@ -136,7 +139,8 @@ module.exports = function(app) {
 
         // Send email
         //const cmd = spawn('mailx', [ "-s", "Support Request", "-r", email, "matthew.bomhoff@gmail.com" ]); //"save-gaesRfvsgNu2@3.basecamp.com" ]); // mailx isn't working
-        const cmd = spawn('perl sendmail.pl', [ "Support Request",  "matthew.bomhoff@gmail.com", email, message ]);
+        var cmdstr = 'perl ' + __dirname + '/sendmail.pl';
+        const cmd = spawn(cmdstr, [ "Support Request",  config.supportEmail, email, message ]);
         console.log({
             stderr: cmd.stderr.toString(),
             stdout: cmd.stdout.toString()
