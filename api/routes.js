@@ -5,7 +5,7 @@ var cors       = require('cors');
 var Promise    = require('promise');
 var bodyParser = require('body-parser');
 var jsonParser = bodyParser.json();
-var spawn      = require('child_process').spawnSync;
+var sendmail   = require('sendmail')();
 var mongo      = require('../config/mongo').mongo;
 var sequelize  = require('../config/mysql').sequelize;
 var models     = require('./models/index');
@@ -137,13 +137,14 @@ module.exports = function(app) {
         var email = request.body.email || "Unknown";
         var message = request.body.message || "";
 
-        // Send email
-        //const cmd = spawn('mailx', [ "-s", "Support Request", "-r", email, "matthew.bomhoff@gmail.com" ]); //"save-gaesRfvsgNu2@3.basecamp.com" ]); // mailx isn't working
-        var cmdstr = 'perl ' + __dirname + '/sendmail.pl';
-        const cmd = spawn(cmdstr, [ "Support Request",  config.supportEmail, email, message ]);
-        console.log({
-            stderr: cmd.stderr.toString(),
-            stdout: cmd.stdout.toString()
+        sendmail({
+            from: email,
+            to: config.supportEmail,
+            subject: 'Support Request',
+            html: message,
+        }, function(err, reply) {
+            console.log(err && err.stack);
+            console.dir(reply);
         });
 
         response.json({
