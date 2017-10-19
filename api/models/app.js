@@ -16,6 +16,14 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.INTEGER(4),
       allowNull: true,
       defaultValue: '1'
+    },
+    tags: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    ontology: {
+      type: DataTypes.TEXT,
+      allowNull: true
     }
   }, {
     tableName: 'app'

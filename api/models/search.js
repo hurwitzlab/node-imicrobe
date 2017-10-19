@@ -16,6 +16,10 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.INTEGER(10).UNSIGNED,
       allowNull: true
     },
+    object_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
     search_text: {
       type: DataTypes.TEXT,
       allowNull: true
