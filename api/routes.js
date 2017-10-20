@@ -367,6 +367,16 @@ module.exports = function(app) {
         .then( sample => response.json(sample) );
     });
 
+    app.get('/samples/:id(\\d+)/proteins', function (request, response) {
+        var id = request.params.id;
+        console.log('GET /samples/' + id + '/proteins');
+
+        models.sample_uproc.findAll({
+            where: { sample_id: id },
+        })
+        .then( sample => response.json(sample) );
+    });
+
     app.get('/samples', function(request, response) {
         console.log('GET /samples', request.query);
 
