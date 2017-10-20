@@ -354,7 +354,6 @@ module.exports = function(app) {
                 { model: models.investigator },
                 { model: models.sample_file },
                 { model: models.ontology },
-                //{ model: models.sample_uproc },
                 { model: models.sample_attr,
                   include: [
                       { model: models.sample_attr_type,
@@ -364,7 +363,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( sample => response.json(sample) );
+        .then( sample => {
+            models.sample_uproc.count({
+                where: { sample_id: id },
+            })
+            .then( count => {
+                sample.dataValues.protein_count = count;
+                response.json(sample)
+            });
+        });
     });
 
     app.get('/samples/:id(\\d+)/proteins', function (request, response) {
