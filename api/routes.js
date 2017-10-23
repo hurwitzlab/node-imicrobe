@@ -23,8 +23,12 @@ module.exports = function(app) {
 
         models.app.findAll({
             include: [
-                { model: models.app_tag },
-                { model: models.app_data_type }
+                { model: models.app_tag
+                , through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.app_data_type
+                , through: { attributes: [] } // remove connector table from output
+                }
             ]
         })
         .then( data => response.json(data) );
@@ -44,8 +48,8 @@ module.exports = function(app) {
         .then( data => response.json(data) );
     });
 
-    app.post('/apps/run', function(request, response) {
-        console.log('POST /apps/run');
+    app.post('/apps/runs', function(request, response) {
+        console.log('POST /apps/runs');
         console.log(request.body);
 
         var app_id = request.body.app_id;
@@ -105,6 +109,7 @@ module.exports = function(app) {
                 },
                 { model: models.sample
                 , attributes: [ 'sample_id', 'sample_name' ]
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -159,6 +164,7 @@ module.exports = function(app) {
             include: [
                 { model: models.project 
                 , attributes: [ 'project_id', 'project_name' ]
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -174,6 +180,7 @@ module.exports = function(app) {
             include: [
                 { model: models.project 
                 , attributes : [ 'project_id', 'project_name' ]
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -187,8 +194,12 @@ module.exports = function(app) {
         models.investigator.findOne({
             where: { investigator_id: id },
             include: [
-                { model: models.project },
-                { model: models.sample }
+                { model: models.project
+                , through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.sample
+                , through: { attributes: [] } // remove connector table from output
+                }
             ]
         })
         .then( investigator => response.json(investigator) );
@@ -234,6 +245,7 @@ module.exports = function(app) {
             include: [
                 { model: models.project 
                 , attributes: [ 'project_id', 'project_name' ]
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -249,6 +261,7 @@ module.exports = function(app) {
             include: [
                 { model: models.project 
                 , attributes: [ 'project_id', 'project_name' ]
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -264,9 +277,11 @@ module.exports = function(app) {
             include: [
                 { model: models.investigator
                 , attributes: ['investigator_id', 'investigator_name']
+                , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.domain
                 , attributes: ['domain_id', 'domain_name']
+                , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.publication
                 , attributes: ['publication_id', 'title']
@@ -307,9 +322,11 @@ module.exports = function(app) {
             include: [
                 { model: models.investigator
                 , attributes: ['investigator_id', 'investigator_name']
+                , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.domain
                 , attributes: ['domain_id', 'domain_name']
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
@@ -381,9 +398,13 @@ module.exports = function(app) {
             where: { sample_id: id },
             include: [
                 { model: models.project },
-                { model: models.investigator },
+                { model: models.investigator
+                , through: { attributes: [] } // remove connector table from output
+                },
                 { model: models.sample_file },
-                { model: models.ontology },
+                { model: models.ontology
+                , through: { attributes: [] } // remove connector table from output
+                },
                 { model: models.assembly },
                 { model: models.combined_assembly },
                 { model: models.sample_attr,
@@ -444,7 +465,7 @@ module.exports = function(app) {
     });
 
     app.get('/samples/files', function(request, response) {
-        console.log('GET /samples/files', request.query);
+        console.log('GET /samples/files', request.query); // query is comma-separated list of sample IDs
 
         var params = {
             attributes:
