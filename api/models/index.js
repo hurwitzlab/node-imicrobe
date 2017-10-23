@@ -41,20 +41,16 @@ models.domain.belongsToMany(models.project, { through: models.project_to_domain,
 // project <- publication
 models.project.hasMany(models.publication, { foreignKey: 'project_id' });
 
-// project <- assembly
+// project <-> assembly
 models.project.hasMany(models.assembly, { foreignKey: 'project_id' });
+models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
-// project <- combined_assembly
+// project <-> combined_assembly
 models.project.hasMany(models.combined_assembly, { foreignKey: 'project_id' });
+models.combined_assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // publication -> project
 models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
-
-// assembly -> project
-models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
-
-// combined_assembly -> project
-models.combined_assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // project <- sample
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
@@ -69,6 +65,10 @@ models.investigator.belongsToMany(models.sample, { through: models.sample_to_inv
 // sample <-> ontology
 models.sample.belongsToMany(models.ontology, { through: models.sample_to_ontology, foreignKey: 'sample_id' });
 models.ontology.belongsToMany(models.sample, { through: models.sample_to_ontology, foreignKey: 'ontology_id' });
+
+// sample <-> assembly
+models.sample.hasMany(models.assembly, { foreignKey: 'sample_id' });
+models.assembly.belongsTo(models.sample, { foreignKey: 'sample_id' });
 
 // sample <-> combined_assembly
 models.sample.belongsToMany(models.combined_assembly, { through: models.combined_assembly_to_sample, foreignKey: 'sample_id' });
@@ -91,11 +91,11 @@ models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr
 // sample_attr_type -> sample_attr_type_alias
 models.sample_attr_type.hasMany(models.sample_attr_type_alias, { foreignKey: 'sample_attr_type_id' });
 
-// sample <- sample_uproc
+// sample <-> sample_uproc
 models.sample.hasMany(models.sample_uproc, { foreignKey: 'sample_id' });
 models.sample_uproc.belongsTo(models.sample, { foreignKey: 'sample_id' });
 
-// app <- app_run
+// app <-> app_run
 models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
 models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });
 

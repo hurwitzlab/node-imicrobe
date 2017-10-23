@@ -262,16 +262,42 @@ module.exports = function(app) {
         models.project.findOne({
             where: { project_id: id },
             include: [
-                { model: models.investigator },
-                { model: models.domain },
-                { model: models.publication },
-                { model: models.sample },
+                { model: models.investigator
+                , attributes: ['investigator_id', 'investigator_name']
+                },
+                { model: models.domain
+                , attributes: ['domain_id', 'domain_name']
+                },
+                { model: models.publication
+                , attributes: ['publication_id', 'title']
+                },
+                { model: models.sample
+                , attributes: ['sample_id', 'sample_name', 'sample_type']
+                },
                 { model: models.project_group
                 , attributes: [ 'project_group_id', 'group_name' ]
                 }
             ]
         })
-        .then( project => response.json(project) );
+        .then( project => {
+            // Split into two queries for speed-up
+            models.project.findOne({
+                where: { project_id: id },
+                include: [
+                    { model: models.assembly
+                    , attributes: [ 'assembly_id', 'assembly_name' ]
+                    },
+                    { model: models.combined_assembly
+                    , attributes: [ 'combined_assembly_id', 'assembly_name' ]
+                    },
+                ]
+            })
+            .then( project2 => {
+                project.dataValues.assemblies = project2.assemblies;
+                project.dataValues.combined_assemblies = project2.combined_assemblies;
+                response.json(project)
+            });
+        });
     });
 
     app.get('/projects', function(request, response) {
@@ -279,8 +305,12 @@ module.exports = function(app) {
 
         models.project.findAll({
             include: [
-                { model: models.investigator },
-                { model: models.domain }
+                { model: models.investigator
+                , attributes: ['investigator_id', 'investigator_name']
+                },
+                { model: models.domain
+                , attributes: ['domain_id', 'domain_name']
+                }
             ]
         })
         .then( project => response.json(project) );
@@ -354,6 +384,8 @@ module.exports = function(app) {
                 { model: models.investigator },
                 { model: models.sample_file },
                 { model: models.ontology },
+                { model: models.assembly },
+                { model: models.combined_assembly },
                 { model: models.sample_attr,
                   include: [
                       { model: models.sample_attr_type,
@@ -379,7 +411,7 @@ module.exports = function(app) {
         console.log('GET /samples/' + id + '/proteins');
 
         models.sample_uproc.findAll({
-            where: { sample_id: id },
+            where: { sample_id: id }
         })
         .then( sample => response.json(sample) );
     });
