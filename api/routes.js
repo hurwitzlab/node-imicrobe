@@ -417,7 +417,7 @@ module.exports = function(app) {
             ]
         })
         .then( sample => {
-            models.sample_uproc.count({
+            models.sample_to_uproc.count({
                 where: { sample_id: id },
             })
             .then( count => {
@@ -431,10 +431,12 @@ module.exports = function(app) {
         var id = request.params.id;
         console.log('GET /samples/' + id + '/proteins');
 
-        models.sample_uproc.findAll({
-            where: { sample_id: id }
-        })
-        .then( sample => response.json(sample) );
+// FIXME
+//        models.uproc.findAll({
+//            where: { sample_id: id },
+//        })
+//        .then( sample => response.json(sample) );
+        response.json([]);
     });
 
     app.get('/samples', function(request, response) {
