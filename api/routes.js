@@ -42,6 +42,10 @@ module.exports = function(app) {
             where: { app_id: id },
             include: [
                 { model: models.app_data_type
+                , through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.app_tag
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
