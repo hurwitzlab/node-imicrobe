@@ -651,21 +651,24 @@ function fixMongoQuery(query) {
 
 function getMetaSearchResults(db, query) {
   return new Promise(function (resolve, reject) {
-    if (typeof(query) == "object" && Object.keys(query).length > 0) {
+    if (typeof(query) == "object") {
+      if (!Object.keys(query).length)
+        resolve([]);
+
       var qry = fixMongoQuery(query);
 
       // I don't want the "text" field in the projection
-      var project = { "text" : 0 }
+      var project = { "text" : 0 };
 
       db.collection('sample').find(qry, project).toArray(
         function(err, docs) {
-          if (err) reject(err)
-          resolve(docs)
+          if (err) reject(err);
+          resolve(docs);
         }
       );
     }
     else {
-      reject("Bad query (" + JSON.stringify(query) + ")")
+      reject("Bad query (" + JSON.stringify(query) + ")");
     }
   });
 }
