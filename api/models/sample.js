@@ -30,11 +30,13 @@ module.exports = function(sequelize, DataTypes) {
     },
     sample_name: {
       type: DataTypes.STRING(255),
-      allowNull: true
+      allowNull: false,
+      defaultValue: ''
     },
     sample_type: {
       type: DataTypes.STRING(255),
-      allowNull: true
+      allowNull: false,
+      defaultValue: ''
     },
     sample_description: {
       type: DataTypes.TEXT,
@@ -46,7 +48,8 @@ module.exports = function(sequelize, DataTypes) {
     },
     taxon_id: {
       type: DataTypes.STRING(255),
-      allowNull: true
+      allowNull: false,
+      defaultValue: ''
     },
     latitude: {
       type: DataTypes.STRING(255),
@@ -58,7 +61,8 @@ module.exports = function(sequelize, DataTypes) {
     },
     url: {
       type: DataTypes.STRING(255),
-      allowNull: true
+      allowNull: false,
+      defaultValue: ''
     }
   }, {
     tableName: 'sample'
