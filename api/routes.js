@@ -405,7 +405,11 @@ module.exports = function(app) {
                 { model: models.investigator
                 , through: { attributes: [] } // remove connector table from output
                 },
-                { model: models.sample_file },
+                { model: models.sample_file,
+                  include: [
+                    { model: models.sample_file_type }
+                  ]
+                },
                 { model: models.ontology
                 , through: { attributes: [] } // remove connector table from output
                 },
