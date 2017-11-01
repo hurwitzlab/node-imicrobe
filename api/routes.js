@@ -370,7 +370,7 @@ module.exports = function(app) {
         console.log("GET /search/" + query);
 
         getSearchResults(query)
-        .then((data) => response.json(data));
+        .then( data => response.json(data) );
     });
 
     app.get('/search_params', function (request, response) {
@@ -524,7 +524,7 @@ function getSearchResults(query) {
     sequelize.query(
       printf(
         `
-        select table_name, primary_key as id
+        select table_name, primary_key as id, object_name
         from   search
         where  match (search_text) against (%s in boolean mode)
         `,
