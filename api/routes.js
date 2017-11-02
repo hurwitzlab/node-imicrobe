@@ -398,40 +398,47 @@ module.exports = function(app) {
         var id = request.params.id;
         console.log('GET /samples/' + id);
 
-        models.sample.findOne({
-            where: { sample_id: id },
-            include: [
-                { model: models.project },
-                { model: models.investigator
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.sample_file,
-                  include: [
-                    { model: models.sample_file_type }
-                  ]
-                },
-                { model: models.ontology
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.assembly },
-                { model: models.combined_assembly },
-                { model: models.sample_attr,
-                  include: [
-                      { model: models.sample_attr_type,
-                        include: [ models.sample_attr_type_alias ]
-                      }
-                  ]
-                }
-            ]
-        })
-        .then( sample => {
+        Promise.all([
+            models.sample.findOne({
+                where: { sample_id: id },
+                include: [
+                    { model: models.project },
+                    { model: models.investigator
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.sample_file,
+                      include: [
+                        { model: models.sample_file_type }
+                      ]
+                    },
+                    { model: models.ontology
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.assembly },
+                    { model: models.combined_assembly },
+                    { model: models.sample_attr,
+                      include: [
+                          { model: models.sample_attr_type,
+                            include: [ models.sample_attr_type_alias ]
+                          }
+                      ]
+                    }
+                ]
+            }),
+
             models.sample_to_uproc.count({
                 where: { sample_id: id },
+            }),
+
+            models.sample_to_centrifuge.count({
+                where: { sample_id: id }
             })
-            .then( count => {
-                sample.dataValues.protein_count = count;
-                response.json(sample)
-            });
+        ])
+        .then( results => {
+            var sample = results[0];
+            sample.dataValues.protein_count = results[1];
+            sample.dataValues.centrifuge_count = results[2];
+            response.json(sample);
         });
     });
 
@@ -445,6 +452,20 @@ module.exports = function(app) {
 //        })
 //        .then( sample => response.json(sample) );
         response.json([]);
+    });
+
+    app.get('/samples/:id(\\d+)/centrifuge_results', function (request, response) {
+        var id = request.params.id;
+        console.log('GET /samples/' + id + '/centrifuge_results');
+
+        models.sample_to_centrifuge.findAll({
+            where: { sample_id: id },
+            attributes: [ 'sample_to_centrifuge_id', 'num_reads', 'num_unique_reads', 'abundance' ],
+            include: [{
+                model: models.centrifuge,
+            }]
+        })
+        .then( results => response.json(results) );
     });
 
     app.get('/samples', function(request, response) {
