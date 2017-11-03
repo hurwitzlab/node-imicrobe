@@ -531,6 +531,27 @@ module.exports = function(app) {
         .catch((err) => response.status(500).send("Err: " + err));
     });
 
+    app.get('/samples/taxonomy_search/:query', function (request, response) {
+        var query = request.params.query;
+        console.log("GET /samples/taxonomy_search/" + query);
+
+        models.centrifuge.findAll({
+            where: { tax_id: query },
+            include: [
+                { model: models.sample,
+                  attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                  include: [
+                    { model: models.project,
+                      attributes: [ 'project_id', 'project_name' ]
+                    }
+                  ]
+                }
+            ]
+        })
+        .then( results => response.json(results) );
+    });
+
+
     app.get('/', function(request, response) {
         var routes = app._router.stack        // registered routes
                      .filter(r => r.route)    // take out all the middleware
