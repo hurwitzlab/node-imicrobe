@@ -92,8 +92,8 @@ models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr
 models.sample_attr_type.hasMany(models.sample_attr_type_alias, { foreignKey: 'sample_attr_type_id' });
 
 // sample <-> uproc
-models.sample.belongsToMany(models.uproc, { through: models.sample_to_uproc, foreignKey: 'sample_id' });
-models.uproc.belongsToMany(models.sample, { through: models.sample_to_uproc, foreignKey: 'uproc_id' });
+//models.sample.belongsToMany(models.uproc, { through: models.sample_to_uproc, foreignKey: 'sample_id' });
+//models.uproc.belongsToMany(models.sample, { through: models.sample_to_uproc, foreignKey: 'uproc_id' });
 
 // sample <-> centrifuge
 models.sample.belongsToMany(models.centrifuge, { through: models.sample_to_centrifuge, foreignKey: 'sample_id' });
