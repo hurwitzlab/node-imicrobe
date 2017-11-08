@@ -426,9 +426,9 @@ module.exports = function(app) {
                 ]
             }),
 
-            models.sample_to_uproc.count({
-                where: { sample_id: id },
-            }),
+            //models.sample_to_uproc.count({
+            //    where: { sample_id: id },
+            //}),
 
             models.sample_to_centrifuge.count({
                 where: { sample_id: id }
