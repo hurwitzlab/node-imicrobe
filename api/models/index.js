@@ -91,9 +91,15 @@ models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr
 // sample_attr_type -> sample_attr_type_alias
 models.sample_attr_type.hasMany(models.sample_attr_type_alias, { foreignKey: 'sample_attr_type_id' });
 
-// sample <-> uproc
-//models.sample.belongsToMany(models.uproc, { through: models.sample_to_uproc, foreignKey: 'sample_id' });
-//models.uproc.belongsToMany(models.sample, { through: models.sample_to_uproc, foreignKey: 'uproc_id' });
+// sample <-> uproc pfam
+models.sample.belongsToMany(models.pfam_annotation, { through: models.uproc_pfam_result, foreignKey: 'sample_id' });
+models.pfam_annotation.belongsToMany(models.sample, { through: models.uproc_pfam_result, foreignKey: 'uproc_id' });
+models.uproc_pfam_result.belongsTo(models.pfam_annotation, { foreignKey: 'uproc_id' });
+
+// sample <-> uproc kegg
+models.sample.belongsToMany(models.kegg_annotation, { through: models.uproc_kegg_result, foreignKey: 'sample_id' });
+models.kegg_annotation.belongsToMany(models.sample, { through: models.uproc_kegg_result, foreignKey: 'kegg_annotation_id' });
+models.uproc_kegg_result.belongsTo(models.kegg_annotation, { foreignKey: 'kegg_annotation_id' });
 
 // sample <-> centrifuge
 models.sample.belongsToMany(models.centrifuge, { through: models.sample_to_centrifuge, foreignKey: 'sample_id' });

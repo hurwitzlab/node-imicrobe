@@ -426,9 +426,13 @@ module.exports = function(app) {
                 ]
             }),
 
-            //models.sample_to_uproc.count({
-            //    where: { sample_id: id },
-            //}),
+            models.uproc_pfam_result.count({
+                where: { sample_id: id },
+            }),
+
+            models.uproc_pfam_result.count({
+                where: { sample_id: id },
+            }),
 
             models.sample_to_centrifuge.count({
                 where: { sample_id: id }
@@ -436,8 +440,8 @@ module.exports = function(app) {
         ])
         .then( results => {
             var sample = results[0];
-            sample.dataValues.protein_count = results[1];
-            sample.dataValues.centrifuge_count = results[2];
+            sample.dataValues.protein_count = results[1] + results[2];
+            sample.dataValues.centrifuge_count = results[3];
             response.json(sample);
         });
     });
@@ -446,12 +450,29 @@ module.exports = function(app) {
         var id = request.params.id;
         console.log('GET /samples/' + id + '/proteins');
 
-// FIXME
-//        models.uproc.findAll({
-//            where: { sample_id: id },
-//        })
-//        .then( sample => response.json(sample) );
-        response.json([]);
+        Promise.all([
+            models.uproc_pfam_result.findAll({
+                where: { sample_id: id },
+                include: [{
+                    model: models.pfam_annotation,
+                    attributes: [ 'accession', 'identifier', 'name', 'description' ]
+                }]
+            }),
+
+            models.uproc_kegg_result.findAll({
+                where: { sample_id: id },
+                include: [{
+                    model: models.kegg_annotation,
+                    attributes: [ 'name', 'definition', 'pathway', 'module' ]
+                }]
+            })
+        ])
+        .then( results => {
+            response.json({
+                pfam: results[0],
+                kegg: results[1]
+            });
+        });
     });
 
     app.get('/samples/:id(\\d+)/centrifuge_results', function (request, response) {
