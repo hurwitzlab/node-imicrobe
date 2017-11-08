@@ -1,7 +1,7 @@
 /* jshint indent: 2 */
 
 module.exports = function(sequelize, DataTypes) {
-  return sequelize.define('uproc', {
+  return sequelize.define('pfam_annotation', {
     uproc_id: {
       type: DataTypes.INTEGER(10).UNSIGNED,
       allowNull: false,
@@ -9,11 +9,16 @@ module.exports = function(sequelize, DataTypes) {
       autoIncrement: true
     },
     accession: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.STRING(16),
+      allowNull: true,
+      unique: true
+    },
+    identifier: {
+      type: DataTypes.STRING(16),
       allowNull: true
     },
     name: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.STRING(80),
       allowNull: true
     },
     description: {
@@ -21,6 +26,6 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: true
     }
   }, {
-    tableName: 'uproc'
+    tableName: 'pfam_annotation'
   });
 };

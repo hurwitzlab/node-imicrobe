@@ -1,7 +1,7 @@
 /* jshint indent: 2 */
 
 module.exports = function(sequelize, DataTypes) {
-  return sequelize.define('sample_to_uproc', {
+  return sequelize.define('uproc_pfam_result', {
     sample_to_uproc_id: {
       type: DataTypes.INTEGER(10).UNSIGNED,
       allowNull: false,
@@ -20,15 +20,15 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.INTEGER(10).UNSIGNED,
       allowNull: false,
       references: {
-        model: 'uproc',
+        model: 'pfam_annotation',
         key: 'uproc_id'
       }
     },
-    count: {
+    read_count: {
       type: DataTypes.INTEGER(11),
       allowNull: true
     }
   }, {
-    tableName: 'sample_to_uproc'
+    tableName: 'uproc_pfam_result'
   });
 };
