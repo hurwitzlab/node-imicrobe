@@ -572,6 +572,31 @@ module.exports = function(app) {
         .then( results => response.json(results) );
     });
 
+    app.get('/samples/protein_search/:query', function (request, response) {
+        var query = request.params.query;
+        console.log("GET /samples/protein_search/" + query);
+
+        if (query.startsWith("PF")) {
+            models.pfam_annotation.findAll({
+                where: { accession: query },
+                include: [
+                    { model: models.uproc_pfam_result,
+                      attributes: [ 'sample_to_uproc_id', 'read_count' ],
+                      include: [{
+                        model: models.sample,
+                        attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                        include: [
+                            { model: models.project,
+                              attributes: [ 'project_id', 'project_name' ]
+                            }
+                          ]
+                      }]
+                    }
+                ]
+            })
+            .then( results => response.json(results) );
+        }
+    });
 
     app.get('/', function(request, response) {
         var routes = app._router.stack        // registered routes
