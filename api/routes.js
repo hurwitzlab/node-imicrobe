@@ -572,11 +572,12 @@ module.exports = function(app) {
         .then( results => response.json(results) );
     });
 
-    app.get('/samples/protein_search/:query', function (request, response) {
-        var query = request.params.query;
-        console.log("GET /samples/protein_search/" + query);
+    app.get('/samples/protein_search/:db/:query', function (request, response) {
+        var db = request.params.db.toUpperCase();
+        var query = request.params.query.toUpperCase();
+        console.log("GET /samples/protein_search/" + db + "/" + query);
 
-        if (query.startsWith("PF")) {
+        if (db == "PFAM") {
             models.pfam_annotation.findAll({
                 where: { accession: query },
                 include: [
@@ -595,6 +596,29 @@ module.exports = function(app) {
                 ]
             })
             .then( results => response.json(results) );
+        }
+        else if (db == "KEGG") {
+            models.kegg_annotation.findAll({
+                where: { kegg_annotation_id: query },
+                include: [
+                    { model: models.uproc_kegg_result,
+                      attributes: [ 'uproc_kegg_result_id', 'read_count' ],
+                      include: [{
+                        model: models.sample,
+                        attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                        include: [
+                            { model: models.project,
+                              attributes: [ 'project_id', 'project_name' ]
+                            }
+                          ]
+                      }]
+                    }
+                ]
+            })
+            .then( results => response.json(results) );
+        }
+        else {
+            response.json([]);
         }
     });
 
