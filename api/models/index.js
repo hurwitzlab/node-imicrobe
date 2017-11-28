@@ -49,11 +49,23 @@ models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 models.project.hasMany(models.combined_assembly, { foreignKey: 'project_id' });
 models.combined_assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
+// project <- sample
+models.project.hasMany(models.sample, { foreignKey: 'project_id' });
+
+// project_file -> project_file
+models.project.hasMany(models.project_file, { foreignKey: 'project_id' });
+models.project_file.belongsTo(models.project, { foreignKey: 'project_id' });
+
+// project_file <-> project_file_type
+models.project_file_type.hasMany(models.project_file, { foreignKey: 'project_file_type_id' });
+models.project_file.belongsTo(models.project_file_type, { foreignKey: 'project_file_type_id' });
+
 // publication -> project
 models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
 
-// project <- sample
-models.project.hasMany(models.sample, { foreignKey: 'project_id' });
+// publication <-> project_file
+models.publication.belongsToMany(models.project_file, { through: models.publication_to_project_file, foreignKey: 'publication_id' });
+models.project_file.belongsToMany(models.publication, { through: models.publication_to_project_file, foreignKey: 'project_file_id' });
 
 // sample -> project
 models.sample.belongsTo(models.project, { foreignKey: 'project_id' });

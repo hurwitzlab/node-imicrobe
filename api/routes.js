@@ -359,7 +359,12 @@ module.exports = function(app) {
         models.publication.findOne({
             where: { publication_id: id },
             include: [
-                { model: models.project }
+                { model: models.project },
+                { model: models.project_file
+                , attributes: [ 'project_file_id', 'project_id', 'file' ]
+                , include: [ { model: models.project_file_type } ]
+                , through: { attributes: [] } // remove connector table from output
+                }
             ]
         })
         .then( data => response.json(data) );
