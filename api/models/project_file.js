@@ -27,7 +27,11 @@ module.exports = function(sequelize, DataTypes) {
     file: {
       type: DataTypes.STRING(255),
       allowNull: true
-    }
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
   }, {
     tableName: 'project_file'
   });

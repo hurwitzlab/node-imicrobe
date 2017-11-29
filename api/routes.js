@@ -361,7 +361,7 @@ module.exports = function(app) {
             include: [
                 { model: models.project },
                 { model: models.project_file
-                , attributes: [ 'project_file_id', 'project_id', 'file' ]
+                , attributes: [ 'project_file_id', 'project_id', 'file', 'description' ]
                 , include: [ { model: models.project_file_type } ]
                 , through: { attributes: [] } // remove connector table from output
                 }
