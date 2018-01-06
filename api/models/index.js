@@ -133,3 +133,11 @@ models.app_tag.belongsToMany(models.app, { through: models.app_to_app_tag, forei
 // app <-> app_data_type
 models.app.belongsToMany(models.app_data_type, { through: models.app_to_app_data_type, foreignKey: 'app_id' });
 models.app_data_type.belongsToMany(models.app, { through: models.app_to_app_data_type, foreignKey: 'app_data_type_id' });
+
+// app <-> app_result
+models.app.hasMany(models.app_result, { foreignKey: 'app_id' });
+models.app_result.belongsTo(models.app, { foreignKey: 'app_id' });
+
+// app_result <-> app_data_type
+models.app_data_type.hasMany(models.app_result, { foreignKey: 'app_data_type_id'} );
+models.app_result.belongsTo(models.app_data_type, { foreignKey: 'app_data_type_id'} );

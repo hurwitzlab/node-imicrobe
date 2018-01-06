@@ -41,11 +41,41 @@ module.exports = function(app) {
         models.app.findOne({
             where: { app_id: id },
             include: [
-                { model: models.app_data_type
-                , through: { attributes: [] } // remove connector table from output
+                { model: models.app_data_type,
+                  through: { attributes: [] } // remove connector table from output
                 },
-                { model: models.app_tag
-                , through: { attributes: [] } // remove connector table from output
+                { model: models.app_tag,
+                  through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.app_result,
+                  attributes: [ 'app_result_id', 'path' ],
+                  include: [
+                    { model: models.app_data_type }
+                  ]
+                }
+            ]
+        })
+        .then( data => response.json(data) );
+    });
+
+    app.get('/apps/:name([\\w\\.\\-\\_]+)', function(request, response) {
+        var name = request.params.name;
+        console.log('GET /apps/' + name);
+
+        models.app.findOne({ // multiple results could be found, just return one of them
+            where: { app_name: name },
+            include: [
+                { model: models.app_data_type,
+                  through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.app_tag,
+                  through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.app_result,
+                  attributes: [ 'app_result_id', 'path' ],
+                  include: [
+                    { model: models.app_data_type }
+                  ]
                 }
             ]
         })
