@@ -55,7 +55,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( app => {
+            if (!app)
+                throw new Error();
+            response.json(app);
+        })
+        .catch((err) => {
+            console.error("Error: App not found");
+            response.status(404).send("App not found");
+        });
     });
 
     app.get('/apps/:name([\\w\\.\\-\\_]+)', function(request, response) {
@@ -79,7 +87,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( app => {
+            if (!app)
+                throw new Error();
+            response.json(app);
+        })
+        .catch((err) => {
+            console.error("Error: App not found");
+            response.status(404).send("App not found");
+        });
     });
 
     app.post('/apps/runs', function(request, response) {
@@ -102,7 +118,11 @@ module.exports = function(app) {
             app_ran_at: sequelize.fn('NOW'),
             params: params
         })
-        .then( app_run => response.json(app_run) );
+        .then( app_run => response.json(app_run) )
+        .catch((err) => {
+            console.error("Error: ", err);
+            response.status(500).send(err);
+        });
     });
 
     app.get('/assemblies', function(request, response) {
@@ -130,7 +150,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( assembly => {
+            if (!assembly)
+                throw new Error();
+            response.json(assembly)
+        })
+        .catch((err) => {
+            console.error("Error: Assembly not found");
+            response.status(404).send("Assembly not found");
+        });
     });
 
     app.get('/combined_assemblies', function(request, response) {
@@ -165,7 +193,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( assembly => {
+            if (!assembly)
+                throw new Error();
+            response.json(assembly);
+        })
+        .catch((err) => {
+            console.error("Error: Combined Assembly not found");
+            response.status(404).send("Combined Assembly not found");
+        });
     });
 
     app.post('/contact', function(request, response) {
@@ -218,7 +254,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( domain => {
+            if (!domain)
+                throw new Error();
+            response.json(domain);
+        })
+        .catch((err) => {
+            console.error("Error: Domain not found");
+            response.status(404).send("Domain not found");
+        });
     });
 
     app.get('/investigators/:id(\\d+)', function(request, response) {
@@ -236,7 +280,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( investigator => response.json(investigator) );
+        .then( investigator => {
+            if (!investigator)
+                throw new Error();
+            response.json(investigator);
+        })
+        .catch((err) => {
+            console.error("Error: Investigator not found");
+            response.status(404).send("Investigator not found");
+        });
     });
 
     app.get('/investigators', function(request, response) {
@@ -299,7 +351,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( group => {
+            if (!group)
+                throw new Error();
+            response.json(group);
+        })
+        .catch((err) => {
+            console.error("Error: Project Group not found");
+            response.status(404).send("Project Group not found");
+        });
     });
 
     app.get('/projects/:id(\\d+)', function(request, response) {
@@ -329,6 +389,9 @@ module.exports = function(app) {
             ]
         })
         .then( project => {
+            if (!project)
+                 throw new Error();
+
             // Split into two queries for speed-up
             models.project.findOne({
                 where: { project_id: id },
@@ -346,6 +409,10 @@ module.exports = function(app) {
                 project.dataValues.combined_assemblies = project2.combined_assemblies;
                 response.json(project)
             });
+        })
+        .catch((err) => {
+            console.error("Error: Project not found");
+            response.status(404).send("Project not found");
         });
     });
 
@@ -397,7 +464,15 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( data => response.json(data) );
+        .then( data => {
+            if (!data)
+                throw new Error();
+            response.json(data);
+        })
+        .catch((err) => {
+            console.error("Error: Publication not found");
+            response.status(404).send("Publication not found");
+        });
     });
 
     app.get('/search/:query', function (request, response) {
@@ -478,6 +553,10 @@ module.exports = function(app) {
             sample.dataValues.protein_count = results[1] + results[2];
             sample.dataValues.centrifuge_count = results[3];
             response.json(sample);
+        })
+        .catch((err) => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
         });
     });
 
@@ -507,6 +586,10 @@ module.exports = function(app) {
                 pfam: results[0],
                 kegg: results[1]
             });
+        })
+        .catch((err) => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
         });
     });
 
@@ -521,7 +604,11 @@ module.exports = function(app) {
                 model: models.centrifuge,
             }]
         })
-        .then( results => response.json(results) );
+        .then( results => response.json(results) )
+        .catch((err) => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
+        });
     });
 
     app.get('/samples', function(request, response) {
@@ -548,7 +635,11 @@ module.exports = function(app) {
         }
 
         models.sample.findAll(params)
-        .then( sample => response.json(sample) );
+        .then( sample => response.json(sample) )
+        .catch((err) => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
+        });
     });
 
     app.get('/samples/files', function(request, response) {
@@ -576,7 +667,11 @@ module.exports = function(app) {
         }
 
         models.sample_file.findAll(params)
-        .then( sample => response.json(sample) );
+        .then( sample => response.json(sample) )
+        .catch((err) => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
+        });
     });
 
     app.post('/samples/search', jsonParser, function (request, response) {
