@@ -366,49 +366,126 @@ module.exports = function(app) {
         var id = request.params.id;
         console.log('GET /projects/' + id);
 
-        models.project.findOne({
-            where: { project_id: id },
-            include: [
-                { model: models.investigator
-                , attributes: ['investigator_id', 'investigator_name']
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.domain
-                , attributes: ['domain_id', 'domain_name']
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.publication
-                , attributes: ['publication_id', 'title']
-                },
-                { model: models.sample
-                , attributes: ['sample_id', 'sample_name', 'sample_type']
-                },
-                { model: models.project_group
-                , attributes: [ 'project_group_id', 'group_name' ]
-                }
-            ]
-        })
-        .then( project => {
-            if (!project)
-                 throw new Error();
+//        models.project.findOne({
+//            where: { project_id: id },
+//            include: [
+//                { model: models.investigator
+//                , attributes: ['investigator_id', 'investigator_name']
+//                , through: { attributes: [] } // remove connector table from output
+//                },
+//                { model: models.domain
+//                , attributes: ['domain_id', 'domain_name']
+//                , through: { attributes: [] } // remove connector table from output
+//                },
+//                { model: models.publication
+//                , attributes: ['publication_id', 'title']
+//                },
+//                { model: models.sample
+//                , attributes: ['sample_id', 'sample_name', 'sample_type']
+//                },
+//                { model: models.project_group
+//                , attributes: [ 'project_group_id', 'group_name' ]
+//                }
+//            ]
+//        })
+//        .then( project => {
+//            if (!project)
+//                 throw new Error();
+//
+//            // Split into two queries for speed-up
+//            models.project.findOne({
+//                where: { project_id: id },
+//                include: [
+//                    { model: models.assembly
+//                    , attributes: [ 'assembly_id', 'assembly_name' ]
+//                    },
+//                    { model: models.combined_assembly
+//                    , attributes: [ 'combined_assembly_id', 'assembly_name' ]
+//                    },
+//                ]
+//            })
+//            .then( project2 => {
+//                project.dataValues.assemblies = project2.assemblies;
+//                project.dataValues.combined_assemblies = project2.combined_assemblies;
+//                response.json(project)
+//            });
+//        })
+//        .catch((err) => {
+//            console.error("Error: Project not found");
+//            response.status(404).send("Project not found");
+//        });
 
-            // Split into two queries for speed-up
+        Promise.all([
             models.project.findOne({
                 where: { project_id: id },
                 include: [
-                    { model: models.assembly
-                    , attributes: [ 'assembly_id', 'assembly_name' ]
+                    { model: models.investigator
+                    , attributes: ['investigator_id', 'investigator_name']
+                    , through: { attributes: [] } // remove connector table from output
                     },
-                    { model: models.combined_assembly
-                    , attributes: [ 'combined_assembly_id', 'assembly_name' ]
+                    { model: models.domain
+                    , attributes: ['domain_id', 'domain_name']
+                    , through: { attributes: [] } // remove connector table from output
                     },
+                    { model: models.publication
+                    , attributes: ['publication_id', 'title']
+                    },
+                    { model: models.sample
+                    , attributes: ['sample_id', 'sample_name', 'sample_type']
+                    },
+                    { model: models.project_group
+                    , attributes: [ 'project_group_id', 'group_name' ]
+                    }
                 ]
-            })
-            .then( project2 => {
-                project.dataValues.assemblies = project2.assemblies;
-                project.dataValues.combined_assemblies = project2.combined_assemblies;
-                response.json(project)
-            });
+            }),
+
+            models.assembly.count({
+                where: { project_id: id },
+            }),
+
+            models.combined_assembly.count({
+                where: { project_id: id },
+            }),
+        ])
+        .then( results => {
+            var project = results[0];
+            project.dataValues.assembly_count = results[1];
+            project.dataValues.combined_assembly_count = results[2];
+            response.json(project);
+        })
+        .catch((err) => {
+            console.error("Error: Project not found");
+            response.status(404).send("Project not found");
+        });
+    });
+
+    app.get('/projects/:id(\\d+)/assemblies', function (request, response) {
+        var id = request.params.id;
+        console.log('GET /projects/' + id + '/assemblies');
+
+        models.assembly.findAll({
+            where: { project_id: id },
+            attributes: [ 'assembly_id', 'assembly_name' ]
+        })
+        .then( data => {
+            response.json(data);
+        })
+        .catch((err) => {
+            console.error("Error: Project not found");
+            response.status(404).send("Project not found");
+        });
+    });
+
+    app.get('/projects/:id(\\d+)/combined_assemblies', function (request, response) {
+        var id = request.params.id;
+        console.log('GET /projects/' + id + '/combined_assemblies');
+
+        models.combined_assembly.findAll({
+            where: { project_id: id },
+            attributes: [ 'combined_assembly_id', 'assembly_name' ]
+        })
+        .then( data => {
+            response.json(data);
         })
         .catch((err) => {
             console.error("Error: Project not found");
