@@ -366,55 +366,6 @@ module.exports = function(app) {
         var id = request.params.id;
         console.log('GET /projects/' + id);
 
-//        models.project.findOne({
-//            where: { project_id: id },
-//            include: [
-//                { model: models.investigator
-//                , attributes: ['investigator_id', 'investigator_name']
-//                , through: { attributes: [] } // remove connector table from output
-//                },
-//                { model: models.domain
-//                , attributes: ['domain_id', 'domain_name']
-//                , through: { attributes: [] } // remove connector table from output
-//                },
-//                { model: models.publication
-//                , attributes: ['publication_id', 'title']
-//                },
-//                { model: models.sample
-//                , attributes: ['sample_id', 'sample_name', 'sample_type']
-//                },
-//                { model: models.project_group
-//                , attributes: [ 'project_group_id', 'group_name' ]
-//                }
-//            ]
-//        })
-//        .then( project => {
-//            if (!project)
-//                 throw new Error();
-//
-//            // Split into two queries for speed-up
-//            models.project.findOne({
-//                where: { project_id: id },
-//                include: [
-//                    { model: models.assembly
-//                    , attributes: [ 'assembly_id', 'assembly_name' ]
-//                    },
-//                    { model: models.combined_assembly
-//                    , attributes: [ 'combined_assembly_id', 'assembly_name' ]
-//                    },
-//                ]
-//            })
-//            .then( project2 => {
-//                project.dataValues.assemblies = project2.assemblies;
-//                project.dataValues.combined_assemblies = project2.combined_assemblies;
-//                response.json(project)
-//            });
-//        })
-//        .catch((err) => {
-//            console.error("Error: Project not found");
-//            response.status(404).send("Project not found");
-//        });
-
         Promise.all([
             models.project.findOne({
                 where: { project_id: id },
