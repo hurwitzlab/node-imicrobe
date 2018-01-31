@@ -462,6 +462,13 @@ module.exports = function(app) {
         .then( project => response.json(project) );
     });
 
+    app.get('/pubchase', function(request, response) {
+        console.log('GET /pubchase');
+
+        models.pubchase.findAll()
+        .then( data => response.json(data) );
+    });
+
     app.get('/publications', function(request, response) {
         console.log('GET /publications');
 
@@ -475,7 +482,6 @@ module.exports = function(app) {
         })
         .then( data => response.json(data) );
     });
-
 
     app.get('/publications/:id(\\d+)', function(request, response) {
         var id = request.params.id;
