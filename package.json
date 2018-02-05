@@ -17,6 +17,7 @@
     "printf": "^0.2.5",
     "promise": "^8.0.0",
     "request": "2.81.0",
+    "request-promise": "4.2.2",
     "sendmail": "1.2.0",
     "sequelize": "4.4.2"
   },

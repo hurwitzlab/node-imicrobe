@@ -1,14 +1,16 @@
 'use strict';
 
-var printf     = require('printf');
-var cors       = require('cors');
-var Promise    = require('promise');
-var bodyParser = require('body-parser');
-var jsonParser = bodyParser.json();
-var sendmail   = require('sendmail')();
-var mongo      = require('../config/mongo').mongo;
-var sequelize  = require('../config/mysql').sequelize;
-var models     = require('./models/index');
+var printf      = require('printf');
+var cors        = require('cors');
+var Promise     = require('promise');
+var bodyParser  = require('body-parser');
+var jsonParser  = bodyParser.json();
+var sendmail    = require('sendmail')();
+var requestp    = require('request-promise');
+var querystring = require('querystring');
+var mongo       = require('../config/mongo').mongo;
+var sequelize   = require('../config/mysql').sequelize;
+var models      = require('./models/index');
 
 // Load config file
 var config = require('../config.json');
@@ -122,6 +124,53 @@ module.exports = function(app) {
         .catch((err) => {
             console.error("Error: ", err);
             response.status(500).send(err);
+        });
+    });
+
+    app.post('/authenticate', function(request, response) { // three-legged oauth
+        console.log('POST /authenticate');
+        console.log(request.body);
+
+        var provider_name = request.body.provider;
+        var code = request.body.code;
+        var user_id = request.body.user_id;
+        var redirect_uri = request.body.redirect_uri;
+
+        var oauthConfig = config.oauthClients["orcid"];
+
+        var options = {
+            method: "POST",
+            uri: oauthConfig.tokenUrl,
+            headers: { Accept: "application/json" },
+            form: {
+                client_id: oauthConfig.clientID,
+                client_secret: oauthConfig.clientSecret,
+                grant_type: "authorization_code",
+                redirect_uri: redirect_uri,
+                code: code
+            },
+            json: true
+        };
+
+        requestp(options)
+        .then(function (parsedBody) {
+            console.log(parsedBody);
+
+            models.user.update(
+                { orcid: parsedBody.orcid },
+                { returning: true, where: { user_id: user_id } }
+            )
+            .then( () => {
+                response.json(parsedBody);
+            })
+            .catch((err) => {
+                console.error("Error: ", err);
+                response.status(500).send(err);
+            });
+        })
+        .catch(function (err) {
+            console.error(err.message);
+            response.status(401).send("Authentication failed");
         });
     });
 
@@ -319,7 +368,7 @@ module.exports = function(app) {
             })
             .then( login => response.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
                 login_id: login.login_id,
-                user_id: login.user_id
+                user: user
             }) );
         });
     });
@@ -784,6 +833,49 @@ module.exports = function(app) {
         else {
             response.json([]);
         }
+    });
+
+    app.get('/users', function(request, response) {
+        console.log('GET /users');
+
+        models.user.findAll()
+        .then( data => response.json(data) );
+    });
+
+    app.get('/users/:id(\\d+)', function(request, response) {
+        var id = request.params.id;
+        console.log('GET /users/' + id);
+
+        models.user.findOne({
+            where: { user_id: id }
+        })
+        .then( data => {
+            if (!data)
+                throw new Error();
+            response.json(data);
+        })
+        .catch((err) => {
+            console.error("Error: User not found");
+            response.status(404).send("User not found");
+        });
+    });
+
+    app.get('/users/:name([\\w\\.\\-\\_]+)', function(request, response) {
+        var name = request.params.name;
+        console.log('GET /users/' + name);
+
+        models.user.findOne({
+            where: { user_name: name }
+        })
+        .then( data => {
+            if (!data)
+                throw new Error();
+            response.json(data);
+        })
+        .catch((err) => {
+            console.error("Error: User not found");
+            response.status(404).send("User not found");
+        });
     });
 
     app.get('/', function(request, response) {

@@ -17,6 +17,10 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.TIME,
       allowNull: false,
       defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
+    },
+    orcid: {
+      type: DataTypes.STRING(30),
+      allowNull: true
     }
   }, {
     tableName: 'user'
