@@ -6,6 +6,7 @@ var Promise     = require('promise');
 var bodyParser  = require('body-parser');
 var jsonParser  = bodyParser.json();
 var sendmail    = require('sendmail')();
+var https       = require("https");
 var requestp    = require('request-promise');
 var querystring = require('querystring');
 var mongo       = require('../config/mongo').mongo;
@@ -114,12 +115,15 @@ module.exports = function(app) {
             return;
         }
 
-        models.app_run.create({
-            app_id: app_id,
-            user_id: user_id,
-            app_ran_at: sequelize.fn('NOW'),
-            params: params
-        })
+        validateAgaveToken(request)
+        .then( () =>
+            models.app_run.create({
+                app_id: app_id,
+                user_id: user_id,
+                app_ran_at: sequelize.fn('NOW'),
+                params: params
+            })
+        )
         .then( app_run => response.json(app_run) )
         .catch((err) => {
             console.error("Error: ", err);
@@ -770,7 +774,10 @@ module.exports = function(app) {
         console.log("GET /samples/taxonomy_search/" + query);
 
         models.centrifuge.findAll({
-            where: { tax_id: query },
+            where: sequelize.or(
+                { tax_id: query },
+                { name: { $like: '%'+query+'%' } }
+            ),
             include: [
                 { model: models.sample,
                   attributes: [ 'sample_id', 'sample_name', 'project_id' ],
@@ -782,7 +789,8 @@ module.exports = function(app) {
                 }
             ]
         })
-        .then( results => response.json(results) );
+        .then( results => response.json(results) )
+        .catch((err) => response.status(500).send("Err: " + err));
     });
 
     app.get('/samples/protein_search/:db/:query', function (request, response) {
@@ -1043,4 +1051,47 @@ function getMetaSearchResults(db, query) {
       reject("Bad query (" + JSON.stringify(query) + ")");
     }
   });
+}
+
+function validateAgaveToken(request) {
+    return new Promise((resolve, reject) => {
+        var token;
+        if (!request.headers || !request.headers.authorization) {
+            reject(new Error('Authorization token missing'));
+        }
+        token = request.headers.authorization;
+        console.log("token:", token);
+
+        const profileRequest = https.request(
+            {   method: 'GET',
+                host: 'agave.iplantc.org',
+                port: 443,
+                path: '/profiles/v2/me',
+                headers: {
+                    Authorization: token
+                }
+            },
+            response => {
+                response.setEncoding("utf8");
+                if (response.statusCode < 200 || response.statusCode > 299) {
+                    reject(new Error('Failed to load page, status code: ' + response.statusCode));
+                }
+
+                var body = [];
+                response.on('data', (chunk) => body.push(chunk));
+                response.on('end', () => {
+                    body = body.join('');
+                    var data = JSON.parse(body);
+                    if (!data || data.status != "success")
+                        reject(new Error('Status ' + data.status));
+                    else {
+                        data.result.token = token;
+                        resolve(data.result);
+                    }
+                });
+            }
+        );
+        profileRequest.on('error', (err) => reject(err));
+        profileRequest.end();
+    });
 }
