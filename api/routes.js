@@ -800,7 +800,12 @@ module.exports = function(app) {
 
         if (db == "PFAM") {
             models.pfam_annotation.findAll({
-                where: { accession: query },
+                where: sequelize.or(
+                    { accession: query },
+                    { identifier: query }
+                    //{ name: { $like: '%'+query+'%' } },           // removed, very slow
+                    //{ description: { $like: '%'+query+'%' } }
+                ),
                 include: [
                     { model: models.uproc_pfam_result,
                       attributes: [ 'sample_to_uproc_id', 'read_count' ],
@@ -820,7 +825,12 @@ module.exports = function(app) {
         }
         else if (db == "KEGG") {
             models.kegg_annotation.findAll({
-                where: { kegg_annotation_id: query },
+                where: sequelize.or(
+                    { kegg_annotation_id: query },
+                    { name: { $like: '%'+query+'%' } }
+                    //{ definition: { $like: '%'+query+'%' } },     // removed, very slow
+                    //{ pathway: { $like: '%'+query+'%' } }
+                ),
                 include: [
                     { model: models.uproc_kegg_result,
                       attributes: [ 'uproc_kegg_result_id', 'read_count' ],
