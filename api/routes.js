@@ -356,8 +356,8 @@ module.exports = function(app) {
 
         var user_name = request.body.user_name;
         if (!user_name) {
-            console.log('Error: missing required field');
-            response.json({});
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
             return;
         }
         console.log('username = ' + user_name);
