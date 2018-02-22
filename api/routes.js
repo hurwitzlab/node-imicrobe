@@ -106,20 +106,24 @@ module.exports = function(app) {
         console.log(request.body);
 
         var app_id = request.body.app_id;
-        var user_id = request.body.user_id;
         var params = request.body.params;
 
-        if (!app_id || !user_id) {
+        if (!app_id || !params) {
             console.log('Error: missing required field');
             response.json({});
             return;
         }
 
         validateAgaveToken(request)
-        .then( () =>
+        .then( (profile) =>
+            models.user.findOne({
+                where: { user_name: profile.username }
+            })
+        )
+        .then( (user) =>
             models.app_run.create({
                 app_id: app_id,
-                user_id: user_id,
+                user_id: user.user_id,
                 app_ran_at: sequelize.fn('NOW'),
                 params: params
             })
@@ -354,7 +358,9 @@ module.exports = function(app) {
     app.post('/login', function(request, response) {
         console.log('POST /login');
 
-        var user_name = request.body.user_name;
+        // TODO validate token
+
+        var user_name = request.body.user_name; // TODO get username from token
         if (!user_name) {
             console.log("Error: missing required field");
             response.status(400).send("Error: missing required field");
@@ -439,6 +445,10 @@ module.exports = function(app) {
                     },
                     { model: models.project_group
                     , attributes: [ 'project_group_id', 'group_name' ]
+                    },
+                    { model: models.user
+                    , attributes: ['user_id', 'user_name']
+                    , through: { attributes: [] } // remove connector table from output
                     }
                 ]
             }),
@@ -509,10 +519,50 @@ module.exports = function(app) {
                 { model: models.domain
                 , attributes: ['domain_id', 'domain_name']
                 , through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.user
+                , attributes: ['user_id', 'user_name']
+                , through: { attributes: [] } // remove connector table from output
                 }
             ]
         })
         .then( project => response.json(project) );
+    });
+
+    app.put('/projects', function(request, response) {
+        console.log('PUT /projects');
+
+        //TODO validate user token
+
+        var project_name = request.body.project_name;
+        if (!project_name) {
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
+            return;
+        }
+        console.log('project_name = ' + project_name);
+
+        models.project.create({
+            project_name: project_name,
+            project_code: "__"+project_name,
+            pi: "",
+            institution: "",
+            project_type: "",
+            url: "",
+            read_file: "",
+            meta_file: "",
+            assembly_file: "",
+            peptide_file: "",
+            email: "",
+            read_pep_file: "",
+            nt_file: "",
+            private: 1
+        })
+        .then( project => response.json(project) )
+        .catch( err => {
+            console.error("Error: cannot create project", err);
+            response.status(404).send("Cannot create project");
+        });
     });
 
     app.get('/pubchase', function(request, response) {
@@ -619,6 +669,10 @@ module.exports = function(app) {
                             include: [ models.sample_attr_type_alias ]
                           }
                       ]
+                    },
+                    { model: models.user
+                    , attributes: ['user_id', 'user_name']
+                    , through: { attributes: [] } // remove connector table from output
                     }
                 ]
             }),
@@ -726,6 +780,57 @@ module.exports = function(app) {
         .catch((err) => {
             console.error("Error: Sample not found");
             response.status(404).send("Sample not found");
+        });
+    });
+
+    app.put('/samples', function(request, response) {
+        console.log('PUT /samples');
+
+        //TODO check permissions on parent project
+
+        var sample_name = request.body.sample_name;
+        var project_id = request.body.project_id;
+        if (!sample_name || !project_id) {
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
+            return;
+        }
+        console.log('sample_name = ' + sample_name);
+        console.log('project_id = ' + project_id);
+
+        validateAgaveToken(request)
+        .then( profile =>
+            models.user.findOne({
+                where: { user_name: profile.username }
+            })
+        )
+        .then( user =>
+            models.sample.create({
+                sample_name: sample_name,
+                sample_code: "__"+sample_name,
+                project_id: project_id,
+                private: 1,
+                sample_to_users: [
+                    { user_id : user.user_id
+                    , permission: 1
+                    }
+                ]
+            },
+            { include: [ models.sample_to_user ]
+            })
+        )
+        .then( sample => {
+            return models.sample.findOne({
+                where: { sample_id: sample.sample_id },
+                include: [
+                    { model: models.project }
+                ]
+            })
+        })
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: cannot create sample", err);
+            response.status(404).send("Cannot create sample");
         });
     });
 
@@ -865,7 +970,11 @@ module.exports = function(app) {
         console.log('GET /users/' + id);
 
         models.user.findOne({
-            where: { user_id: id }
+            where: { user_id: id },
+            include: [
+                { model: models.project },
+                { model: models.sample }
+            ]
         })
         .then( data => {
             if (!data)
@@ -1067,6 +1176,7 @@ function validateAgaveToken(request) {
     return new Promise((resolve, reject) => {
         var token;
         if (!request.headers || !request.headers.authorization) {
+            console.log('Error: Authorizaiton token missing: headers = ', request.headers);
             reject(new Error('Authorization token missing'));
         }
         token = request.headers.authorization;
