@@ -60,6 +60,10 @@ models.project_file.belongsTo(models.project, { foreignKey: 'project_id' });
 models.project_file_type.hasMany(models.project_file, { foreignKey: 'project_file_type_id' });
 models.project_file.belongsTo(models.project_file_type, { foreignKey: 'project_file_type_id' });
 
+// project <-> user
+models.project.belongsToMany(models.user, { through: models.project_to_user, foreignKey: 'project_id' });
+models.user.belongsToMany(models.project, { through: models.project_to_user, foreignKey: 'user_id' });
+
 // publication -> project
 models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
 
@@ -121,6 +125,11 @@ models.kegg_annotation.hasMany(models.uproc_kegg_result, { foreignKey: 'kegg_ann
 models.sample.belongsToMany(models.centrifuge, { through: models.sample_to_centrifuge, foreignKey: 'sample_id' });
 models.centrifuge.belongsToMany(models.sample, { through: models.sample_to_centrifuge, foreignKey: 'centrifuge_id' });
 models.sample_to_centrifuge.belongsTo(models.centrifuge, { foreignKey: 'centrifuge_id' });
+
+// sample <-> user
+models.sample.belongsToMany(models.user, { through: models.sample_to_user, foreignKey: 'sample_id' });
+models.user.belongsToMany(models.sample, { through: models.sample_to_user, foreignKey: 'user_id' });
+models.sample.hasMany(models.sample_to_user, { foreignKey: 'sample_id' });
 
 // app <-> app_run
 models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
