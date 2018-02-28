@@ -38,8 +38,9 @@ models.project_group.belongsToMany(models.project, { through: models.project_to_
 models.project.belongsToMany(models.domain, { through: models.project_to_domain, foreignKey: 'project_id' });
 models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'domain_id' });
 
-// project <- publication
+// project <-> publication
 models.project.hasMany(models.publication, { foreignKey: 'project_id' });
+models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // project <-> assembly
 models.project.hasMany(models.assembly, { foreignKey: 'project_id' });
@@ -49,8 +50,9 @@ models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 models.project.hasMany(models.combined_assembly, { foreignKey: 'project_id' });
 models.combined_assembly.belongsTo(models.project, { foreignKey: 'project_id' });
 
-// project <- sample
+// project <-> sample
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
+models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // project_file -> project_file
 models.project.hasMany(models.project_file, { foreignKey: 'project_id' });
@@ -64,15 +66,9 @@ models.project_file.belongsTo(models.project_file_type, { foreignKey: 'project_f
 models.project.belongsToMany(models.user, { through: models.project_to_user, foreignKey: 'project_id' });
 models.user.belongsToMany(models.project, { through: models.project_to_user, foreignKey: 'user_id' });
 
-// publication -> project
-models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
-
 // publication <-> project_file
 models.publication.belongsToMany(models.project_file, { through: models.publication_to_project_file, foreignKey: 'publication_id' });
 models.project_file.belongsToMany(models.publication, { through: models.publication_to_project_file, foreignKey: 'project_file_id' });
-
-// sample -> project
-models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // sample <-> investigator
 models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
@@ -101,7 +97,8 @@ models.sample_file.belongsTo(models.sample_file_type, { foreignKey: 'sample_file
 models.sample.hasMany(models.sample_attr, { foreignKey: 'sample_id' });
 models.sample_attr.belongsTo(models.sample, { foreignKey: 'sample_id' });
 
-// sample_attr -> sample_attr_type
+// sample_attr <-> sample_attr_type
+models.sample_attr_type.hasMany(models.sample_attr, { foreignKey: 'sample_attr_type_id' });
 models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr_type_id' });
 
 // sample_attr_type -> sample_attr_type_alias

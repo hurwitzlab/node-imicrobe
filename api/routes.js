@@ -834,6 +834,98 @@ module.exports = function(app) {
         });
     });
 
+    app.put('/samples/attributes', function(request, response) {
+        console.log('PUT /samples/attributes');
+
+        var sample_id = request.body.sample_id;
+        var attr_type = request.body.attr_type;
+        var attr_aliases = request.body.attr_aliases;
+        var attr_value = request.body.attr_value;
+        if (!sample_id || !attr_type || !attr_value) {
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
+            return;
+        }
+        console.log('sample_id = ' + sample_id);
+        console.log('attr_type = ' + attr_type);
+        console.log('attr_aliases = ' + attr_aliases);
+        console.log('attr_value = ' + attr_value);
+
+        validateAgaveToken(request)
+        .then( profile =>
+            // Check permissions on parent project/sample
+            models.user.findOne({
+                where: { user_name: profile.username },
+                include: [
+                    { model: models.sample
+                    , where: { sample_id: sample_id }
+                    },
+                    { model: models.project
+                    , include: [
+                        { model: models.sample
+                        , where: { sample_id: sample_id }
+                        }
+                      ]
+                    }
+                ]
+            })
+        )
+        .then( user => {
+            if (user.samples && user.samples.length > 0) {
+                return user.samples[0];
+            }
+            else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
+                return user.projects[0].samples[0];
+            }
+            else {
+                console.log("Error: permission denied");
+                response.status(403).send("Error: permission denied");
+                return;
+            }
+        })
+        .then( sample =>
+            models.sample_attr_type.findOrCreate({
+                where: { type: attr_type }
+            })
+            .spread( (sample_attr_type, created) => {
+                console.log("type created: ", created);
+                return sample_attr_type
+            })
+        )
+        .then( sample_attr_type =>
+            models.sample_attr.findOrCreate({
+                    where: {
+                        sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                        sample_id: sample_id,
+                        attr_value: attr_value
+                    }
+                })
+                .spread( (sample_attr, created) => {
+                    console.log("attr created: ", created);
+                })
+        )
+        .then( () =>
+            models.sample.findOne({
+                where: { sample_id: sample_id },
+                include: [
+                    { model: models.project },
+                    { model: models.sample_attr,
+                      include: [
+                          { model: models.sample_attr_type,
+                            include: [ models.sample_attr_type_alias ]
+                          }
+                      ]
+                    }
+                ]
+            })
+        )
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: cannot create sample attribute", err);
+            response.status(404).send("Cannot create sample attribute");
+        });
+    });
+
     app.get('/samples/files', function(request, response) {
         console.log('GET /samples/files', request.query); // query is comma-separated list of sample IDs
 
