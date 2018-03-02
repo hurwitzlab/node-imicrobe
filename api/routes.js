@@ -834,10 +834,10 @@ module.exports = function(app) {
         });
     });
 
-    app.put('/samples/attributes', function(request, response) {
-        console.log('PUT /samples/attributes');
+    app.put('/samples/:sample_id(\\d+)/attributes', function(request, response) {
+        var sample_id = request.params.sample_id;
+        console.log('PUT /samples/' + sample_id + '/attributes');
 
-        var sample_id = request.body.sample_id;
         var attr_type = request.body.attr_type;
         var attr_aliases = request.body.attr_aliases;
         var attr_value = request.body.attr_value;
@@ -846,7 +846,6 @@ module.exports = function(app) {
             response.status(400).send("Error: missing required field");
             return;
         }
-        console.log('sample_id = ' + sample_id);
         console.log('attr_type = ' + attr_type);
         console.log('attr_aliases = ' + attr_aliases);
         console.log('attr_value = ' + attr_value);
@@ -923,6 +922,38 @@ module.exports = function(app) {
         .catch( err => {
             console.error("Error: cannot create sample attribute", err);
             response.status(404).send("Cannot create sample attribute");
+        });
+    });
+
+    app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (request, response) {
+        var sample_id = request.params.sample_id;
+        var attr_id = request.params.attr_id;
+        console.log('DELETE /samples/' + sample_id + '/attributes/' + attr_id);
+
+        //TODO check token && permissions
+
+        models.sample_attr.destroy({
+            where: { sample_attr_id: attr_id }
+        })
+        .then( () => {
+            return models.sample.findOne({
+                where: { sample_id: sample_id },
+                include: [
+                    { model: models.project },
+                    { model: models.sample_attr,
+                      include: [
+                          { model: models.sample_attr_type,
+                            include: [ models.sample_attr_type_alias ]
+                          }
+                      ]
+                    }
+                ]
+            })
+        })
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: Sample attribute not found");
+            response.status(404).send("Sample attribute not found");
         });
     });
 
