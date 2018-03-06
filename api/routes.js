@@ -925,6 +925,100 @@ module.exports = function(app) {
         });
     });
 
+    app.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(request, response) {
+        var sample_id = request.params.sample_id;
+        var attr_id = request.params.attr_id;
+        console.log('PUT /samples/' + sample_id + '/attributes/' + attr_id);
+
+        var attr_type = request.body.attr_type;
+        var attr_aliases = request.body.attr_aliases;
+        var attr_value = request.body.attr_value;
+        if (!sample_id || !attr_id || !attr_type || !attr_value) {
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
+            return;
+        }
+        console.log('attr_type = ' + attr_type);
+        console.log('attr_aliases = ' + attr_aliases);
+        console.log('attr_value = ' + attr_value);
+
+        validateAgaveToken(request)
+        .then( profile =>
+            // Check permissions on parent project/sample
+            models.user.findOne({
+                where: { user_name: profile.username },
+                include: [
+                    { model: models.sample
+                    , where: { sample_id: sample_id }
+                    },
+                    { model: models.project
+                    , include: [
+                        { model: models.sample
+                        , where: { sample_id: sample_id }
+                        }
+                      ]
+                    }
+                ]
+            })
+        )
+        .then( user => {
+            if (user.samples && user.samples.length > 0) {
+                return user.samples[0];
+            }
+            else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
+                return user.projects[0].samples[0];
+            }
+            else {
+                console.log("Error: permission denied");
+                response.status(403).send("Error: permission denied");
+                return;
+            }
+        })
+        .then( sample =>
+            models.sample_attr_type.findOrCreate({
+                where: { type: attr_type }
+            })
+            .spread( (sample_attr_type, created) => {
+                console.log("type created: ", created);
+                return sample_attr_type
+            })
+        )
+        .then( sample_attr_type =>
+            models.sample_attr.update(
+                    { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                      attr_value: attr_value
+                    },
+                    { where: {
+                        sample_attr_id: attr_id
+                      }
+                    }
+                )
+                .spread( (sample_attr, created) => {
+                    console.log("attr created: ", created);
+                })
+        )
+        .then( () =>
+            models.sample.findOne({
+                where: { sample_id: sample_id },
+                include: [
+                    { model: models.project },
+                    { model: models.sample_attr,
+                      include: [
+                          { model: models.sample_attr_type,
+                            include: [ models.sample_attr_type_alias ]
+                          }
+                      ]
+                    }
+                ]
+            })
+        )
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: cannot update sample attribute", err);
+            response.status(404).send("Cannot update sample attribute");
+        });
+    });
+
     app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (request, response) {
         var sample_id = request.params.sample_id;
         var attr_id = request.params.attr_id;
