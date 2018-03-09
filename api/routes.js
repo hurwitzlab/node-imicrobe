@@ -834,6 +834,41 @@ module.exports = function(app) {
         });
     });
 
+    app.post('/samples/:id(\\d+)', function (request, response) {
+        var id = request.params.id;
+        console.log('GET /samples/' + id);
+
+        // TODO check permissions on sample
+
+        var sample_name = request.body.sample_name;
+        var sample_code = request.body.sample_code;
+        var sample_type = request.body.sample_type;
+        console.log('sample_name = ' + sample_name);
+        console.log('sample_code = ' + sample_code);
+        console.log('sample_type = ' + sample_type);
+
+        models.sample.update(
+            { sample_name: sample_name,
+              sample_acc: sample_code,
+              sample_type: sample_type
+            },
+            { where: { sample_id: id } }
+        )
+        .then( result =>
+            models.sample.findOne({
+                where: { sample_id: id },
+                include: [
+                    { model: models.project },
+                ]
+            })
+        )
+        .then( sample => response.json(sample) )
+        .catch((err) => {
+            console.error("Error: " + err);
+            response.status(404).send(err);
+        });
+    });
+
     app.put('/samples/:sample_id(\\d+)/attributes', function(request, response) {
         var sample_id = request.params.sample_id;
         console.log('PUT /samples/' + sample_id + '/attributes');
@@ -985,17 +1020,14 @@ module.exports = function(app) {
         )
         .then( sample_attr_type =>
             models.sample_attr.update(
-                    { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                      attr_value: attr_value
-                    },
-                    { where: {
-                        sample_attr_id: attr_id
-                      }
-                    }
-                )
-                .spread( (sample_attr, created) => {
-                    console.log("attr created: ", created);
-                })
+                { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                  attr_value: attr_value
+                },
+                { where: {
+                    sample_attr_id: attr_id
+                  }
+                }
+            )
         )
         .then( () =>
             models.sample.findOne({
@@ -1113,9 +1145,6 @@ module.exports = function(app) {
                             file
                         }
                     })
-//                    .spread( (sample_file, created) => {
-//                        console.log("sample_file created: ", created);
-//                    })
                 )
             );
         })
