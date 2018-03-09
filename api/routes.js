@@ -1083,6 +1083,94 @@ module.exports = function(app) {
         });
     });
 
+    app.put('/samples/:sample_id/files', function(request, response) {
+        var sample_id = request.params.sample_id;
+        console.log('PUT /samples/' + sample_id + '/files');
+
+        //TODO check permissions on parent project/sample
+
+        var files = request.body.files;
+        if (!files) {
+            console.log("Error: missing required field");
+            response.status(400).send("Error: missing required field");
+            return;
+        }
+        console.log('files = ' + files);
+
+        validateAgaveToken(request)
+        .then( profile =>
+            models.user.findOne({
+                where: { user_name: profile.username }
+            })
+        )
+        .then( () => {
+            return files.map( file =>
+                models.sample_file.findOrCreate({
+                    where: {
+                        sample_id: sample_id,
+                        sample_file_type_id: 1,
+                        file
+                    }
+                })
+                .spread( (sample_file, created) => {
+                    console.log("sample_file created: ", created);
+                })
+            );
+        })
+        .then( () => {
+            return models.sample.findOne({
+                where: { sample_id: sample_id },
+                include: [
+                    { model: models.project },
+                    { model: models.sample_file,
+                      include: [
+                        { model: models.sample_file_type,
+                          attributes: [ 'sample_file_type_id', 'type' ]
+                        }
+                      ]
+                    }
+                ]
+            })
+        })
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: cannot create sample", err);
+            response.status(404).send("Cannot create sample");
+        });
+    });
+
+    app.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (request, response) {
+        var sample_id = request.params.sample_id;
+        var file_id = request.params.file_id;
+        console.log('DELETE /samples/' + sample_id + '/files/' + file_id);
+
+        //TODO check token && permissions
+
+        models.sample_file.destroy({
+            where: { sample_file_id: file_id }
+        })
+        .then( () => {
+            return models.sample.findOne({
+                where: { sample_id: sample_id },
+                include: [
+                    { model: models.project },
+                    { model: models.sample_file,
+                      include: [
+                        { model: models.sample_file_type,
+                          attributes: [ 'sample_file_type_id', 'type' ]
+                        }
+                      ]
+                    }
+                ]
+            })
+        })
+        .then( sample => response.json(sample) )
+        .catch( err => {
+            console.error("Error: Sample file not found");
+            response.status(404).send("Sample file not found");
+        });
+    });
+
     app.post('/samples/search', jsonParser, function (request, response) {
         console.log("POST /samples/search");
         mongo()
