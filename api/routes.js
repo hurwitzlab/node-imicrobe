@@ -1104,17 +1104,19 @@ module.exports = function(app) {
             })
         )
         .then( () => {
-            return files.map( file =>
-                models.sample_file.findOrCreate({
-                    where: {
-                        sample_id: sample_id,
-                        sample_file_type_id: 1,
-                        file
-                    }
-                })
-                .spread( (sample_file, created) => {
-                    console.log("sample_file created: ", created);
-                })
+            return Promise.all(
+                files.map( file =>
+                    models.sample_file.findOrCreate({
+                        where: {
+                            sample_id: sample_id,
+                            sample_file_type_id: 1,
+                            file
+                        }
+                    })
+//                    .spread( (sample_file, created) => {
+//                        console.log("sample_file created: ", created);
+//                    })
+                )
             );
         })
         .then( () => {
