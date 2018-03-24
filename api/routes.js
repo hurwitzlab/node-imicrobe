@@ -13,6 +13,7 @@ var mongo       = require('../config/mongo').mongo;
 var sequelize   = require('../config/mysql').sequelize;
 var models      = require('./models/index');
 
+
 // Load config file
 var config = require('../config.json');
 
@@ -348,11 +349,47 @@ module.exports = function(app) {
         });
     });
 
+    app.get('/investigators/:name(\\w+)', function(request, response) {
+        var name = request.params.name;
+        console.log('GET /investigators/' + name);
+
+        models.investigator.findAll({
+            where: { investigator_name: { $like: "%"+name+"%" } }
+        })
+        .then( result => {
+            if (!result)
+                throw new Error();
+            response.json(result);
+        })
+        .catch((err) => {
+            console.error(err);
+            response.status(404).send(err);
+        });
+    });
+
     app.get('/investigators', function(request, response) {
         console.log('GET /investigators');
 
         models.investigator.findAll()
         .then( investigator => response.json(investigator) );
+    });
+
+    app.put('/investigators', function(request, response) {
+        console.log('PUT /investigators');
+        console.log('request = ' + request.body);
+
+        //TODO validate user token
+
+        models.investigator.create({
+            name: request.body.name,
+            institution: request.body.institution,
+            url: request.body.url
+        })
+        .then( investigator => response.json(investigator) )
+        .catch( err => {
+            console.error("Error: cannot create investigator", err);
+            response.status(404).send("Cannot create investigator");
+        });
     });
 
     app.post('/login', function(request, response) {
@@ -438,7 +475,7 @@ module.exports = function(app) {
                     , through: { attributes: [] } // remove connector table from output
                     },
                     { model: models.publication
-                    , attributes: ['publication_id', 'title']
+                    , attributes: ['publication_id', 'title', 'author']
                     },
                     { model: models.sample
                     , attributes: ['sample_id', 'sample_name', 'sample_type']
@@ -520,6 +557,9 @@ module.exports = function(app) {
                 , attributes: ['domain_id', 'domain_name']
                 , through: { attributes: [] } // remove connector table from output
                 },
+                { model: models.publication
+                , attributes: ['publication_id', 'title']
+                },
                 { model: models.user
                 , attributes: ['user_id', 'user_name']
                 , through: { attributes: [] } // remove connector table from output
@@ -565,6 +605,89 @@ module.exports = function(app) {
         });
     });
 
+    app.post('/projects/:id(\\d+)', function (request, response) {
+        var id = request.params.id;
+        console.log('POST /projects/' + id);
+        console.log('body =', request.body);
+
+        // TODO check permissions on project
+
+        var project_name = request.body.project_name;
+        var project_code = request.body.project_code;
+        var project_type = request.body.project_type;
+        var project_url = request.body.project_url;
+
+        models.project.update(
+            { project_name: project_name,
+              project_code: project_code,
+              project_type: project_type,
+              url: project_url
+            },
+            { where: { project_id: id } }
+        )
+        .then( result =>
+            models.project.findOne({
+                where: { project_id: id },
+//                include: [
+//                    { model: models.project },
+//                ]
+            })
+        )
+        .then( project => response.json(project) )
+        .catch((err) => {
+            console.error("Error: " + err);
+            response.status(404).send(err);
+        });
+    });
+
+    app.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (request, response) {
+        var project_id = request.params.project_id;
+        var investigator_id = request.params.investigator_id;
+        console.log('PUT /projects/' + project_id + '/investigators/' + investigator_id);
+
+        // TODO check permissions on project
+
+        models.project_to_investigator.findOrCreate({
+            where: {
+                project_id: project_id,
+                investigator_id: investigator_id
+            }
+        })
+        .then( () =>
+            models.project.findOne({
+                where: { project_id: project_id },
+                include: [
+                    { model: models.investigator },
+                ]
+            })
+        )
+        .then( project => response.json(project) )
+        .catch((err) => {
+            console.error("Error: " + err);
+            response.status(404).send(err);
+        });
+    });
+
+    app.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (request, response) {
+        var project_id = request.params.project_id;
+        var investigator_id = request.params.investigator_id;
+        console.log('DELETE /projects/' + project_id + '/investigators/' + investigator_id);
+
+        // TODO check permissions on project
+
+        models.project_to_investigator.destroy({
+            where: {
+                project_id: project_id,
+                investigator_id: investigator_id
+            }
+        })
+        .then( result => response.json(result) )
+        .catch( err => {
+            console.error(err);
+            response.status(404).send(err);
+        });
+    });
+
     app.get('/pubchase', function(request, response) {
         console.log('GET /pubchase');
 
@@ -607,6 +730,71 @@ module.exports = function(app) {
             response.json(data);
         })
         .catch((err) => {
+            console.error("Error: Publication not found");
+            response.status(404).send("Publication not found");
+        });
+    });
+
+    app.put('/publications', function(request, response) {
+        console.log('PUT /publications');
+        console.log('request = ', request.body);
+
+        //TODO validate user token
+
+        models.publication.create({
+            project_id: request.body.project_id,
+            title: request.body.title,
+            author: request.body.authors,
+            pub_date: request.body.date,
+            pubmed_id: request.body.pubmed_id,
+            doi: request.body.doi
+        })
+        .then( publication => response.json(publication) )
+        .catch( err => {
+            console.error("Error: cannot create publication", err);
+            response.status(404).send("Cannot create publication");
+        });
+    });
+
+    app.post('/publications/:id(\\d+)', function (request, response) {
+        var id = request.params.id;
+        console.log('POST /publications/' + id);
+        console.log('body = ', request.body);
+
+        // TODO check token and permissions
+
+        models.publication.update(
+            { title: request.body.title,
+              author: request.body.authors,
+              pub_date: request.body.date,
+              pubmed_id: request.body.pubmed_id,
+              doi: request.body.doi
+            },
+            { where: { publication_id: id } }
+        )
+        .then( result =>
+            models.publication.findOne({
+                where: { publication_id: id }
+            })
+        )
+        .then( publication => response.json(publication) )
+        .catch((err) => {
+            console.error("Error: " + err);
+            response.status(404).send(err);
+        });
+    });
+
+    app.delete('/publications/:id(\\d+)', function (request, response) {
+        var id = request.params.id;
+        console.log('DELETE /publications/' + id);
+
+        //TODO check token && permissions
+
+        models.publication.destroy({
+            where: { publication_id: id }
+        })
+        .then( result => response.json(result) )
+        .catch( err => {
             console.error("Error: Publication not found");
             response.status(404).send("Publication not found");
         });
@@ -836,7 +1024,7 @@ module.exports = function(app) {
 
     app.post('/samples/:id(\\d+)', function (request, response) {
         var id = request.params.id;
-        console.log('GET /samples/' + id);
+        console.log('POST /samples/' + id);
 
         // TODO check permissions on sample
 
@@ -866,6 +1054,22 @@ module.exports = function(app) {
         .catch((err) => {
             console.error("Error: " + err);
             response.status(404).send(err);
+        });
+    });
+
+    app.delete('/samples/:sample_id(\\d+)', function (request, response) {
+        var sample_id = request.params.sample_id;
+        console.log('DELETE /samples/' + sample_id);
+
+        //TODO check token && permissions
+
+        models.sample.destroy({
+            where: { sample_id: sample_id }
+        })
+        .then( result => response.json(result) )
+        .catch( err => {
+            console.error("Error: Sample not found");
+            response.status(404).send("Sample not found");
         });
     });
 
@@ -1308,8 +1512,21 @@ module.exports = function(app) {
         models.user.findOne({
             where: { user_id: id },
             include: [
-                { model: models.project },
-                { model: models.sample }
+                { model: models.project,
+                  through: { attributes: [] }, // remove connector table from output
+                  include: [
+                    { model: models.investigator,
+                      through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.publication }
+                  ]
+                },
+                { model: models.sample,
+                  through: { attributes: [] }, // remove connector table from output
+                  include: [
+                    { model: models.sample_file }
+                  ]
+                }
             ]
         })
         .then( data => {
@@ -1318,8 +1535,8 @@ module.exports = function(app) {
             response.json(data);
         })
         .catch((err) => {
-            console.error("Error: User not found");
-            response.status(404).send("User not found");
+            console.error(err);
+            response.status(404).send(err.toString);
         });
     });
 
