@@ -363,7 +363,7 @@ module.exports = function(app) {
         })
         .catch((err) => {
             console.error(err);
-            response.status(404).send(err);
+            response.status(400).send(err);
         });
     });
 
@@ -467,27 +467,37 @@ module.exports = function(app) {
                 where: { project_id: id },
                 include: [
                     { model: models.investigator
-                    , attributes: ['investigator_id', 'investigator_name']
+                    , attributes: [ 'investigator_id', 'investigator_name' ]
                     , through: { attributes: [] } // remove connector table from output
                     },
                     { model: models.domain
-                    , attributes: ['domain_id', 'domain_name']
+                    , attributes: [ 'domain_id', 'domain_name' ]
                     , through: { attributes: [] } // remove connector table from output
                     },
                     { model: models.publication
-                    , attributes: ['publication_id', 'title', 'author']
+                    , attributes: ['publication_id', 'title', 'author' ]
                     },
                     { model: models.sample
-                    , attributes: ['sample_id', 'sample_name', 'sample_type']
+                    , attributes: ['sample_id', 'sample_name', 'sample_type' ]
                     },
                     { model: models.project_group
                     , attributes: [ 'project_group_id', 'group_name' ]
                     },
                     { model: models.user
-                    , attributes: ['user_id', 'user_name']
+                    , attributes: [ 'user_id', 'user_name' ]
                     , through: { attributes: [] } // remove connector table from output
                     }
                 ]
+            }),
+
+            models.project.aggregate('project_type', 'DISTINCT', { plain: false }),
+
+            models.domain.findAll({
+                attributes: [ 'domain_id', 'domain_name' ]
+            }),
+
+            models.project_group.findAll({
+                attributes: [ 'project_group_id', 'group_name' ]
             }),
 
             models.assembly.count({
@@ -496,17 +506,20 @@ module.exports = function(app) {
 
             models.combined_assembly.count({
                 where: { project_id: id },
-            }),
+            })
         ])
         .then( results => {
             var project = results[0];
-            project.dataValues.assembly_count = results[1];
-            project.dataValues.combined_assembly_count = results[2];
+            project.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
+            project.dataValues.available_domains = results[2];
+            project.dataValues.available_groups = results[3];
+            project.dataValues.assembly_count = results[4];
+            project.dataValues.combined_assembly_count = results[5];
             response.json(project);
         })
         .catch((err) => {
-            console.error("Error: Project not found");
-            response.status(404).send("Project not found");
+            console.error(err);
+            response.status(400).send(err);
         });
     });
 
@@ -563,16 +576,17 @@ module.exports = function(app) {
                 { model: models.user
                 , attributes: ['user_id', 'user_name']
                 , through: { attributes: [] } // remove connector table from output
-                }
-            ]
+                },
+            ],
+            attributes: {
+                include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
+            }
         })
         .then( project => response.json(project) );
     });
 
     app.put('/projects', function(request, response) {
         console.log('PUT /projects');
-
-        //TODO validate user token
 
         var project_name = request.body.project_name;
         if (!project_name) {
@@ -582,32 +596,47 @@ module.exports = function(app) {
         }
         console.log('project_name = ' + project_name);
 
-        models.project.create({
-            project_name: project_name,
-            project_code: "__"+project_name,
-            pi: "",
-            institution: "",
-            project_type: "",
-            url: "",
-            read_file: "",
-            meta_file: "",
-            assembly_file: "",
-            peptide_file: "",
-            email: "",
-            read_pep_file: "",
-            nt_file: "",
-            private: 1
-        })
+        validateAgaveToken(request)
+        .then( profile =>
+            models.user.findOne({
+                where: { user_name: profile.username }
+            })
+        )
+        .then( user =>
+            models.project.create({
+                project_name: project_name,
+                project_code: "",
+                pi: "",
+                institution: "",
+                project_type: "<not provided>",
+                url: "",
+                read_file: "",
+                meta_file: "",
+                assembly_file: "",
+                peptide_file: "",
+                email: "",
+                read_pep_file: "",
+                nt_file: "",
+                private: 1,
+                project_to_users: [
+                    { user_id: user.user_id,
+                      permission: 1
+                    }
+                ]
+            },
+            { include: [ models.project_to_user ]
+            })
+        )
         .then( project => response.json(project) )
         .catch( err => {
-            console.error("Error: cannot create project", err);
-            response.status(404).send("Cannot create project");
+            console.error(err);
+            response.status(400).send(err);
         });
     });
 
-    app.post('/projects/:id(\\d+)', function (request, response) {
-        var id = request.params.id;
-        console.log('POST /projects/' + id);
+    app.post('/projects/:project_id(\\d+)', function (request, response) {
+        var project_id = request.params.project_id;
+        console.log('POST /projects/' + project_id);
         console.log('body =', request.body);
 
         // TODO check permissions on project
@@ -616,6 +645,8 @@ module.exports = function(app) {
         var project_code = request.body.project_code;
         var project_type = request.body.project_type;
         var project_url = request.body.project_url;
+        var domains = request.body.domains;
+        var groups = request.body.groups;
 
         models.project.update(
             { project_name: project_name,
@@ -623,20 +654,55 @@ module.exports = function(app) {
               project_type: project_type,
               url: project_url
             },
-            { where: { project_id: id } }
+            { where: { project_id: project_id } }
         )
-        .then( result =>
+        .then( () => // remove all domains from project
+            models.project_to_domain.destroy({
+                where: { project_id: project_id }
+            })
+        )
+        .then( () =>
+            Promise.all(
+                domains.map( d =>
+                    models.project_to_domain.findOrCreate({
+                        where: {
+                            project_id: project_id,
+                            domain_id: d.domain_id
+                        }
+                    })
+                )
+            )
+        )
+//        .then( () => // remove all groups from project
+//            models.project_to_project_group.destroy({
+//                where: { project_id: project_id }
+//            })
+//        )
+//        .then( () =>
+//            Promise.all(
+//                groups.map( g =>
+//                    models.project_to_project_group.findOrCreate({
+//                        where: {
+//                            project_id: project_id,
+//                            project_group_id: g.project_group_id
+//                        }
+//                    })
+//                )
+//            )
+//        )
+        .then( () =>
             models.project.findOne({
-                where: { project_id: id },
-//                include: [
-//                    { model: models.project },
-//                ]
+                where: { project_id: project_id },
+                include: [
+                    { model: models.project_group },
+                    { model: models.domain }
+                ]
             })
         )
         .then( project => response.json(project) )
         .catch((err) => {
             console.error("Error: " + err);
-            response.status(404).send(err);
+            response.status(400).send(err);
         });
     });
 
@@ -664,7 +730,7 @@ module.exports = function(app) {
         .then( project => response.json(project) )
         .catch((err) => {
             console.error("Error: " + err);
-            response.status(404).send(err);
+            response.status(400).send(err);
         });
     });
 
@@ -684,7 +750,32 @@ module.exports = function(app) {
         .then( result => response.json(result) )
         .catch( err => {
             console.error(err);
-            response.status(404).send(err);
+            response.status(400).send(err);
+        });
+    });
+
+    app.delete('/projects/:project_id(\\d+)', function (request, response) {
+        var project_id = request.params.project_id;
+        console.log('DELETE /projects/' + project_id);
+
+        // TODO check permissions on project
+
+        models.publication.destroy({ // FIXME add on cascade delete
+            where: {
+                project_id: project_id
+            }
+        })
+        .then(
+            models.project.destroy({
+                where: {
+                    project_id: project_id
+                }
+            })
+        )
+        .then( result => response.json(result) )
+        .catch( err => {
+            console.error(err);
+            response.status(400).send(err);
         });
     });
 
@@ -780,7 +871,7 @@ module.exports = function(app) {
         .then( publication => response.json(publication) )
         .catch((err) => {
             console.error("Error: " + err);
-            response.status(404).send(err);
+            response.status(400).send(err);
         });
     });
 
@@ -1053,7 +1144,7 @@ module.exports = function(app) {
         .then( sample => response.json(sample) )
         .catch((err) => {
             console.error("Error: " + err);
-            response.status(404).send(err);
+            response.status(400).send(err);
         });
     });
 
@@ -1063,13 +1154,16 @@ module.exports = function(app) {
 
         //TODO check token && permissions
 
-        models.sample.destroy({
+        models.sample_file.destroy({
             where: { sample_id: sample_id }
         })
+        .then( models.sample.destroy({
+            where: { sample_id: sample_id }
+        }) )
         .then( result => response.json(result) )
         .catch( err => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
+            console.error(err);
+            response.status(400).send(err);
         });
     });
 
