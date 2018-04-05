@@ -1210,7 +1210,7 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             models.centrifuge.findAll({
                 where: sequelize.or(
-                    { tax_id: query },
+                    { tax_id: req.params.query },
                     { name: { $like: '%'+req.params.query+'%' } }
                 ),
                 include: [
@@ -1451,7 +1451,7 @@ function validateAgaveToken(req, isTokenRequired) {
                 resolve();
             }
         }
-        console.log("validateAgaveToken: token", token);
+        console.log("validateAgaveToken: token:", token);
 
         const profilereq = https.request(
             {   method: 'GET',
