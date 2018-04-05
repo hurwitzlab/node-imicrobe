@@ -1014,7 +1014,7 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             // Check permissions on parent project/sample
             models.user.findOne({
-                where: { user_name: profile.username },
+                where: { user_name: req.auth.profile.username },
                 include: [
                     { model: models.sample
                     , where: { sample_id: sample_id }
