@@ -1,149 +1,126 @@
 'use strict';
 
-var printf      = require('printf');
-var cors        = require('cors');
-var Promise     = require('promise');
-var bodyParser  = require('body-parser');
-var jsonParser  = bodyParser.json();
-var sendmail    = require('sendmail')();
-var https       = require("https");
-var requestp    = require('request-promise');
-var querystring = require('querystring');
-var mongo       = require('../config/mongo').mongo;
-var sequelize   = require('../config/mysql').sequelize;
-var models      = require('./models/index');
-
+const printf      = require('printf');
+const cors        = require('cors');
+const Promise     = require('promise');
+const bodyParser  = require('body-parser');
+const jsonParser  = bodyParser.json();
+const sendmail    = require('sendmail')();
+const https       = require("https");
+const requestp    = require('request-promise');
+const querystring = require('querystring');
+const mongo       = require('../config/mongo').mongo;
+const sequelize   = require('../config/mysql').sequelize;
+const models      = require('./models/index');
 
 // Load config file
-var config = require('../config.json');
+const config = require('../config.json');
 
+// Create error types
+class MyError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.statusCode = statusCode;
+    }
+}
+
+const ERR_BAD_REQUEST = new MyError("Bad request", 400);
+const ERR_UNAUTHORIZED = new MyError("Unauthorized", 401);
+const ERR_NOT_FOUND = new MyError("Not found", 404);
+
+
+//TODO split up into modules
 module.exports = function(app) {
     app.use(cors());
     app.use(bodyParser.json()); // support json encoded bodies
     app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
+    app.use(requestLogger);
+    app.use(agaveTokenValidator);
 
-    app.get('/apps', function(request, response) {
-        console.log('GET /apps');
-
-        models.app.findAll({
-            include: [
-                { model: models.app_tag
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.app_data_type
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( data => response.json(data) );
-    });
-
-    app.get('/apps/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /apps/' + id);
-
-        models.app.findOne({
-            where: { app_id: id },
-            include: [
-                { model: models.app_data_type,
-                  through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.app_tag,
-                  through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.app_result,
-                  attributes: [ 'app_result_id', 'path' ],
-                  include: [
-                    { model: models.app_data_type }
-                  ]
-                }
-            ]
-        })
-        .then( app => {
-            if (!app)
-                throw new Error();
-            response.json(app);
-        })
-        .catch((err) => {
-            console.error("Error: App not found");
-            response.status(404).send("App not found");
-        });
-    });
-
-    app.get('/apps/:name([\\w\\.\\-\\_]+)', function(request, response) {
-        var name = request.params.name;
-        console.log('GET /apps/' + name);
-
-        models.app.findOne({ // multiple results could be found, just return one of them
-            where: { app_name: name },
-            include: [
-                { model: models.app_data_type,
-                  through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.app_tag,
-                  through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.app_result,
-                  attributes: [ 'app_result_id', 'path' ],
-                  include: [
-                    { model: models.app_data_type }
-                  ]
-                }
-            ]
-        })
-        .then( app => {
-            if (!app)
-                throw new Error();
-            response.json(app);
-        })
-        .catch((err) => {
-            console.error("Error: App not found");
-            response.status(404).send("App not found");
-        });
-    });
-
-    app.post('/apps/runs', function(request, response) {
-        console.log('POST /apps/runs');
-        console.log(request.body);
-
-        var app_id = request.body.app_id;
-        var params = request.body.params;
-
-        if (!app_id || !params) {
-            console.log('Error: missing required field');
-            response.json({});
-            return;
-        }
-
-        validateAgaveToken(request)
-        .then( (profile) =>
-            models.user.findOne({
-                where: { user_name: profile.username }
+    app.get('/apps', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.app.findAll({
+                include: [
+                    { model: models.app_tag
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.app_data_type
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
             })
-        )
-        .then( (user) =>
+        );
+    });
+
+    app.get('/apps/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.app.findOne({
+                where: { app_id: req.params.id },
+                include: [
+                    { model: models.app_data_type,
+                      through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.app_tag,
+                      through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.app_result,
+                      attributes: [ 'app_result_id', 'path' ],
+                      include: [
+                        { model: models.app_data_type }
+                      ]
+                    }
+                ]
+            })
+        );
+    });
+
+    app.get('/apps/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.app.findOne({ // multiple results could be found, just return one of them
+                where: { app_name: req.params.name },
+                include: [
+                    { model: models.app_data_type,
+                      through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.app_tag,
+                      through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.app_result,
+                      attributes: [ 'app_result_id', 'path' ],
+                      include: [
+                        { model: models.app_data_type }
+                      ]
+                    }
+                ]
+            })
+        );
+    });
+
+    app.post('/apps/runs', function(req, res, next) {
+        var app_id = req.body.app_id;
+        var params = req.body.params;
+
+        errorOnNull(app_id, params);
+
+        requireAuth(req);
+
+        toJsonOrError(res, next,
             models.app_run.create({
                 app_id: app_id,
-                user_id: user.user_id,
+                user_id: req.auth.user.user_id,
                 app_ran_at: sequelize.fn('NOW'),
                 params: params
             })
-        )
-        .then( app_run => response.json(app_run) )
-        .catch((err) => {
-            console.error("Error: ", err);
-            response.status(500).send(err);
-        });
+        );
     });
 
-    app.post('/authenticate', function(request, response) { // three-legged oauth
-        console.log('POST /authenticate');
-        console.log(request.body);
+    app.post('/authenticate', function(req, res, next) { // three-legged oauth
+        console.log(req.body);
 
-        var provider_name = request.body.provider;
-        var code = request.body.code;
-        var user_id = request.body.user_id;
-        var redirect_uri = request.body.redirect_uri;
+        var provider_name = req.body.provider;
+        var code = req.body.code;
+        var user_id = req.body.user_id;
+        var redirect_uri = req.body.redirect_uri;
 
         var oauthConfig = config.oauthClients["orcid"];
 
@@ -170,439 +147,321 @@ module.exports = function(app) {
                 { returning: true, where: { user_id: user_id } }
             )
             .then( () => {
-                response.json(parsedBody);
+                res.json(parsedBody);
             })
             .catch((err) => {
                 console.error("Error: ", err);
-                response.status(500).send(err);
+                res.status(500).send(err);
             });
         })
         .catch(function (err) {
             console.error(err.message);
-            response.status(401).send("Authentication failed");
+            res.status(401).send("Authentication failed");
         });
     });
 
-    app.get('/assemblies', function(request, response) {
-        console.log('GET /assemblies');
-
-        models.assembly.findAll({
-            include: [
-                { model: models.project
-                , attributes: [ 'project_id', 'project_name' ]
-                }
-            ]
-        })
-        .then( data => response.json(data) );
+    app.get('/assemblies', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.assembly.findAll({
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    }
+                ]
+            })
+        );
     });
 
-    app.get('/assemblies/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /assemblies/' + id);
-
-        models.assembly.findOne({
-            where: { assembly_id: id },
-            include: [
-                { model: models.project
-                , attributes : [ 'project_id', 'project_name' ]
-                }
-            ]
-        })
-        .then( assembly => {
-            if (!assembly)
-                throw new Error();
-            response.json(assembly)
-        })
-        .catch((err) => {
-            console.error("Error: Assembly not found");
-            response.status(404).send("Assembly not found");
-        });
+    app.get('/assemblies/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.assembly.findOne({
+                where: { assembly_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , attributes : [ 'project_id', 'project_name' ]
+                    }
+                ]
+            })
+        );
     });
 
-    app.get('/combined_assemblies', function(request, response) {
-        console.log('GET /combined_assemblies');
-
-        models.combined_assembly.findAll({
-            include: [
-                { model: models.project
-                , attributes: [ 'project_id', 'project_name' ]
-                },
-                { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( data => response.json(data) );
+    app.get('/combined_assemblies', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.combined_assembly.findAll({
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    },
+                    { model: models.sample
+                    , attributes: [ 'sample_id', 'sample_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
+            })
+        );
     });
 
-    app.get('/combined_assemblies/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /combined_assemblies/' + id);
-
-        models.combined_assembly.findOne({
-            where: { combined_assembly_id: id },
-            include: [
-                { model: models.project
-                , attributes : [ 'project_id', 'project_name' ]
-                },
-                { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
-                }
-            ]
-        })
-        .then( assembly => {
-            if (!assembly)
-                throw new Error();
-            response.json(assembly);
-        })
-        .catch((err) => {
-            console.error("Error: Combined Assembly not found");
-            response.status(404).send("Combined Assembly not found");
-        });
+    app.get('/combined_assemblies/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.combined_assembly.findOne({
+                where: { combined_assembly_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , attributes : [ 'project_id', 'project_name' ]
+                    },
+                    { model: models.sample
+                    , attributes: [ 'sample_id', 'sample_name' ]
+                    }
+                ]
+            })
+        );
     });
 
-    app.post('/contact', function(request, response) {
-        console.log('POST /contact');
-        console.log(request.body);
+    app.post('/contact', function(req, res, next) {
+        console.log(req.body);
 
-        var name = request.body.name || "Unknown";
-        var email = request.body.email || "Unknown";
-        var message = request.body.message || "";
+        var name = req.body.name || "Unknown";
+        var email = req.body.email || "Unknown";
+        var message = req.body.message || "";
 
         sendmail({
             from: email,
             to: config.supportEmail,
-            subject: 'Support Request',
+            subject: 'Support req',
             html: message,
-        }, function(err, reply) {
+        }, (err, reply) => {
             console.log(err && err.stack);
             console.dir(reply);
         });
 
-        response.json({
+        res.json({
             status: "success"
-        })
-    });
-
-    app.get('/domains', function(request, response) {
-        console.log('GET /domains');
-
-        models.domain.findAll({
-            include: [
-                { model: models.project 
-                , attributes: [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( data => response.json(data) );
-    });
-
-    app.get('/domains/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /domains/' + id);
-
-        models.domain.findOne({
-            where: { domain_id: id },
-            include: [
-                { model: models.project 
-                , attributes : [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( domain => {
-            if (!domain)
-                throw new Error();
-            response.json(domain);
-        })
-        .catch((err) => {
-            console.error("Error: Domain not found");
-            response.status(404).send("Domain not found");
         });
     });
 
-    app.get('/investigators/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /investigators/' + id);
-
-        models.investigator.findOne({
-            where: { investigator_id: id },
-            include: [
-                { model: models.project
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.sample
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( investigator => {
-            if (!investigator)
-                throw new Error();
-            response.json(investigator);
-        })
-        .catch((err) => {
-            console.error("Error: Investigator not found");
-            response.status(404).send("Investigator not found");
-        });
-    });
-
-    app.get('/investigators/:name(\\w+)', function(request, response) {
-        var name = request.params.name;
-        console.log('GET /investigators/' + name);
-
-        models.investigator.findAll({
-            where: { investigator_name: { $like: "%"+name+"%" } }
-        })
-        .then( result => {
-            if (!result)
-                throw new Error();
-            response.json(result);
-        })
-        .catch((err) => {
-            console.error(err);
-            response.status(400).send(err);
-        });
-    });
-
-    app.get('/investigators', function(request, response) {
-        console.log('GET /investigators');
-
-        models.investigator.findAll()
-        .then( investigator => response.json(investigator) );
-    });
-
-    app.put('/investigators', function(request, response) {
-        console.log('PUT /investigators');
-        console.log('request = ' + request.body);
-
-        //TODO validate user token
-
-        models.investigator.create({
-            name: request.body.name,
-            institution: request.body.institution,
-            url: request.body.url
-        })
-        .then( investigator => response.json(investigator) )
-        .catch( err => {
-            console.error("Error: cannot create investigator", err);
-            response.status(404).send("Cannot create investigator");
-        });
-    });
-
-    app.post('/login', function(request, response) {
-        console.log('POST /login');
-
-        // TODO validate token
-
-        var user_name = request.body.user_name; // TODO get username from token
-        if (!user_name) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('username = ' + user_name);
-
-        models.user.findOrCreate({
-            where: { user_name: user_name }
-        })
-        .spread( (user, created) => {
-            models.login.create({
-                user_id: user.user_id,
-                login_date: sequelize.fn('NOW'),
-            })
-            .then( login => response.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
-                login_id: login.login_id,
-                user: user
-            }) );
-        });
-    });
-
-    app.get('/project_groups', function(request, response) {
-        console.log('GET /project_groups');
-
-        models.project_group.findAll({
-            include: [
-                { model: models.project 
-                , attributes: [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( data => response.json(data) );
-    })
-
-    app.get('/project_groups/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /project_groups/' + id);
-
-        models.project_group.findOne({
-            where: { project_group_id: id },
-            include: [
-                { model: models.project 
-                , attributes: [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
-        .then( group => {
-            if (!group)
-                throw new Error();
-            response.json(group);
-        })
-        .catch((err) => {
-            console.error("Error: Project Group not found");
-            response.status(404).send("Project Group not found");
-        });
-    });
-
-    app.get('/projects/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /projects/' + id);
-
-        Promise.all([
-            models.project.findOne({
-                where: { project_id: id },
+    app.get('/domains', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.domain.findAll({
                 include: [
-                    { model: models.investigator
-                    , attributes: [ 'investigator_id', 'investigator_name' ]
-                    , through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.domain
-                    , attributes: [ 'domain_id', 'domain_name' ]
-                    , through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.publication
-                    , attributes: ['publication_id', 'title', 'author' ]
-                    },
-                    { model: models.sample
-                    , attributes: ['sample_id', 'sample_name', 'sample_type' ]
-                    },
-                    { model: models.project_group
-                    , attributes: [ 'project_group_id', 'group_name' ]
-                    },
-                    { model: models.user
-                    , attributes: [ 'user_id', 'user_name' ]
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
                     , through: { attributes: [] } // remove connector table from output
                     }
                 ]
-            }),
+            })
+        );
+    });
 
-            models.project.aggregate('project_type', 'DISTINCT', { plain: false }),
+    app.get('/domains/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.domain.findOne({
+                where: { domain_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , attributes : [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
+            })
+        );
+    });
 
-            models.domain.findAll({
-                attributes: [ 'domain_id', 'domain_name' ]
-            }),
+    app.get('/investigators/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.investigator.findOne({
+                where: { investigator_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.sample
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
+            })
+        );
+    });
 
+    app.get('/investigators/:name(\\w+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.investigator.findAll({
+                where: { investigator_name: { $like: "%"+req.params.name+"%" } }
+            })
+        );
+    });
+
+    app.get('/investigators', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.investigator.findAll()
+        );
+    });
+
+    app.put('/investigators', function(req, res, next) {
+        var name = req.body.name;
+        var institution = req.body.institution;
+
+        errorOnNull(name, institution);
+
+        requireAuth(req);
+
+        toJsonOrError(res, next,
+            models.investigator.create({
+                name: req.body.name,
+                institution: req.body.institution,
+                url: req.body.url
+            })
+        );
+    });
+
+    app.get('/project_groups', function(req, res, next) {
+        toJsonOrError(res, next,
             models.project_group.findAll({
-                attributes: [ 'project_group_id', 'group_name' ]
-            }),
-
-            models.assembly.count({
-                where: { project_id: id },
-            }),
-
-            models.combined_assembly.count({
-                where: { project_id: id },
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
             })
-        ])
-        .then( results => {
-            var project = results[0];
-            project.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
-            project.dataValues.available_domains = results[2];
-            project.dataValues.available_groups = results[3];
-            project.dataValues.assembly_count = results[4];
-            project.dataValues.combined_assembly_count = results[5];
-            response.json(project);
-        })
-        .catch((err) => {
-            console.error(err);
-            response.status(400).send(err);
-        });
-    });
+        );
+    })
 
-    app.get('/projects/:id(\\d+)/assemblies', function (request, response) {
-        var id = request.params.id;
-        console.log('GET /projects/' + id + '/assemblies');
-
-        models.assembly.findAll({
-            where: { project_id: id },
-            attributes: [ 'assembly_id', 'assembly_name' ]
-        })
-        .then( data => {
-            response.json(data);
-        })
-        .catch((err) => {
-            console.error("Error: Project not found");
-            response.status(404).send("Project not found");
-        });
-    });
-
-    app.get('/projects/:id(\\d+)/combined_assemblies', function (request, response) {
-        var id = request.params.id;
-        console.log('GET /projects/' + id + '/combined_assemblies');
-
-        models.combined_assembly.findAll({
-            where: { project_id: id },
-            attributes: [ 'combined_assembly_id', 'assembly_name' ]
-        })
-        .then( data => {
-            response.json(data);
-        })
-        .catch((err) => {
-            console.error("Error: Project not found");
-            response.status(404).send("Project not found");
-        });
-    });
-
-    app.get('/projects', function(request, response) {
-        console.log('GET /projects');
-
-        models.project.findAll({
-            include: [
-                { model: models.investigator
-                , attributes: ['investigator_id', 'investigator_name']
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.domain
-                , attributes: ['domain_id', 'domain_name']
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.publication
-                , attributes: ['publication_id', 'title']
-                },
-                { model: models.user
-                , attributes: ['user_id', 'user_name']
-                , through: { attributes: [] } // remove connector table from output
-                },
-            ],
-            attributes: {
-                include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
-            }
-        })
-        .then( project => response.json(project) );
-    });
-
-    app.put('/projects', function(request, response) {
-        console.log('PUT /projects');
-
-        var project_name = request.body.project_name;
-        if (!project_name) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('project_name = ' + project_name);
-
-        validateAgaveToken(request)
-        .then( profile =>
-            models.user.findOne({
-                where: { user_name: profile.username }
+    app.get('/project_groups/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.project_group.findOne({
+                where: { project_group_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
             })
-        )
-        .then( user =>
+        );
+    });
+
+    app.get('/projects/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
+            Promise.all([
+                models.project.findOne({
+                    where: {
+                        project_id: req.params.id,
+                        $or: [ // check permissions -- DO NOT MODIFY
+                            { private: { $or: [0, null] } },
+                            (req.auth.user ? sequelize.literal("users.user_name = '" + req.auth.user.user_name + "'") : {})
+                        ]
+                    },
+                    include: [
+                        { model: models.investigator
+                        , attributes: [ 'investigator_id', 'investigator_name' ]
+                        , through: { attributes: [] } // remove connector table from output
+                        },
+                        { model: models.domain
+                        , attributes: [ 'domain_id', 'domain_name' ]
+                        , through: { attributes: [] } // remove connector table from output
+                        },
+                        { model: models.publication
+                        , attributes: ['publication_id', 'title', 'author' ]
+                        },
+                        { model: models.sample
+                        , attributes: ['sample_id', 'sample_name', 'sample_type' ]
+                        },
+                        { model: models.project_group
+                        , attributes: [ 'project_group_id', 'group_name' ]
+                        },
+                        { model: models.user
+                        , attributes: [ 'user_id', 'user_name' ]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                    ]
+                }),
+
+                models.project.aggregate('project_type', 'DISTINCT', { plain: false }),
+
+                models.domain.findAll({
+                    attributes: [ 'domain_id', 'domain_name' ]
+                }),
+
+                models.project_group.findAll({
+                    attributes: [ 'project_group_id', 'group_name' ]
+                }),
+
+                models.assembly.count({
+                    where: { project_id: req.params.id },
+                }),
+
+                models.combined_assembly.count({
+                    where: { project_id: req.params.id },
+                })
+            ])
+            .then( results => {
+                var project = results[0];
+                if (!project)
+                    throw(ERR_NOT_FOUND);
+
+                project.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
+                project.dataValues.available_domains = results[2];
+                project.dataValues.available_groups = results[3];
+                project.dataValues.assembly_count = results[4];
+                project.dataValues.combined_assembly_count = results[5];
+                return project;
+            })
+        );
+    });
+
+    app.get('/projects/:id(\\d+)/assemblies', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.assembly.findAll({
+                where: { project_id: req.params.id },
+                attributes: [ 'assembly_id', 'assembly_name' ]
+            })
+        );
+    });
+
+    app.get('/projects/:id(\\d+)/combined_assemblies', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.combined_assembly.findAll({
+                where: { project_id: req.params.id },
+                attributes: [ 'combined_assembly_id', 'assembly_name' ]
+            })
+        );
+    });
+
+    app.get('/projects', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.project.findAll({
+                include: [
+                    { model: models.investigator
+                    , attributes: ['investigator_id', 'investigator_name']
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.domain
+                    , attributes: ['domain_id', 'domain_name']
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.publication
+                    , attributes: ['publication_id', 'title']
+                    },
+                    { model: models.user
+                    , attributes: ['user_id', 'user_name']
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                ],
+                attributes: {
+                    include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
+                }
+            })
+        );
+    });
+
+    app.put('/projects', function(req, res, next) {
+        var project_name = req.body.project_name;
+
+        errorOnNull(project_name);
+
+        requireAuth(req);
+
+        toJsonOrError(res, next,
             models.project.create({
                 project_name: project_name,
                 project_code: "",
@@ -619,421 +478,348 @@ module.exports = function(app) {
                 nt_file: "",
                 private: 1,
                 project_to_users: [
-                    { user_id: user.user_id,
-                      permission: 1
+                    { user_id: req.auth.user.user_id,
+                      permission: 1 //FIXME hardcoded
                     }
                 ]
             },
             { include: [ models.project_to_user ]
             })
-        )
-        .then( project => response.json(project) )
-        .catch( err => {
-            console.error(err);
-            response.status(400).send(err);
-        });
+        );
     });
 
-    app.post('/projects/:project_id(\\d+)', function (request, response) {
-        var project_id = request.params.project_id;
-        console.log('POST /projects/' + project_id);
-        console.log('body =', request.body);
+    app.post('/projects/:project_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
         // TODO check permissions on project
 
-        var project_name = request.body.project_name;
-        var project_code = request.body.project_code;
-        var project_type = request.body.project_type;
-        var project_url = request.body.project_url;
-        var domains = request.body.domains;
-        var groups = request.body.groups;
+        var project_id = req.params.project_id;
+        var project_name = req.body.project_name;
+        var project_code = req.body.project_code;
+        var project_type = req.body.project_type;
+        var project_url = req.body.project_url;
+        var domains = req.body.domains;
+        var groups = req.body.groups;
 
-        models.project.update(
-            { project_name: project_name,
-              project_code: project_code,
-              project_type: project_type,
-              url: project_url
-            },
-            { where: { project_id: project_id } }
-        )
-        .then( () => // remove all domains from project
-            models.project_to_domain.destroy({
-                where: { project_id: project_id }
-            })
-        )
-        .then( () =>
-            Promise.all(
-                domains.map( d =>
-                    models.project_to_domain.findOrCreate({
-                        where: {
-                            project_id: project_id,
-                            domain_id: d.domain_id
-                        }
-                    })
+        toJsonOrError(res, next,
+            models.project.update(
+                { project_name: project_name,
+                  project_code: project_code,
+                  project_type: project_type,
+                  url: project_url
+                },
+                { where: { project_id: project_id } }
+            )
+            .then( () => // remove all domains from project
+                models.project_to_domain.destroy({
+                    where: { project_id: project_id }
+                })
+            )
+            .then( () =>
+                Promise.all(
+                    domains.map( d =>
+                        models.project_to_domain.findOrCreate({
+                            where: {
+                                project_id: project_id,
+                                domain_id: d.domain_id
+                            }
+                        })
+                    )
                 )
             )
-        )
-//        .then( () => // remove all groups from project
-//            models.project_to_project_group.destroy({
-//                where: { project_id: project_id }
-//            })
-//        )
-//        .then( () =>
-//            Promise.all(
-//                groups.map( g =>
-//                    models.project_to_project_group.findOrCreate({
-//                        where: {
-//                            project_id: project_id,
-//                            project_group_id: g.project_group_id
-//                        }
-//                    })
+//            .then( () => // remove all groups from project
+//                models.project_to_project_group.destroy({
+//                    where: { project_id: project_id }
+//                })
+//            )
+//            .then( () =>
+//                Promise.all(
+//                    groups.map( g =>
+//                        models.project_to_project_group.findOrCreate({
+//                            where: {
+//                                project_id: project_id,
+//                                project_group_id: g.project_group_id
+//                            }
+//                        })
+//                    )
 //                )
 //            )
-//        )
-        .then( () =>
-            models.project.findOne({
-                where: { project_id: project_id },
-                include: [
-                    { model: models.project_group },
-                    { model: models.domain }
-                ]
-            })
-        )
-        .then( project => response.json(project) )
-        .catch((err) => {
-            console.error("Error: " + err);
-            response.status(400).send(err);
-        });
+            .then( () =>
+                models.project.findOne({
+                    where: { project_id: project_id },
+                    include: [
+                        { model: models.project_group },
+                        { model: models.domain }
+                    ]
+                })
+            )
+        );
     });
 
-    app.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (request, response) {
-        var project_id = request.params.project_id;
-        var investigator_id = request.params.investigator_id;
-        console.log('PUT /projects/' + project_id + '/investigators/' + investigator_id);
+    app.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
         // TODO check permissions on project
 
-        models.project_to_investigator.findOrCreate({
-            where: {
-                project_id: project_id,
-                investigator_id: investigator_id
-            }
-        })
-        .then( () =>
-            models.project.findOne({
-                where: { project_id: project_id },
-                include: [
-                    { model: models.investigator },
-                ]
-            })
-        )
-        .then( project => response.json(project) )
-        .catch((err) => {
-            console.error("Error: " + err);
-            response.status(400).send(err);
-        });
-    });
-
-    app.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (request, response) {
-        var project_id = request.params.project_id;
-        var investigator_id = request.params.investigator_id;
-        console.log('DELETE /projects/' + project_id + '/investigators/' + investigator_id);
-
-        // TODO check permissions on project
-
-        models.project_to_investigator.destroy({
-            where: {
-                project_id: project_id,
-                investigator_id: investigator_id
-            }
-        })
-        .then( result => response.json(result) )
-        .catch( err => {
-            console.error(err);
-            response.status(400).send(err);
-        });
-    });
-
-    app.delete('/projects/:project_id(\\d+)', function (request, response) {
-        var project_id = request.params.project_id;
-        console.log('DELETE /projects/' + project_id);
-
-        // TODO check permissions on project
-
-        models.publication.destroy({ // FIXME add on cascade delete
-            where: {
-                project_id: project_id
-            }
-        })
-        .then(
-            models.project.destroy({
+        toJsonOrError(res, next,
+            models.project_to_investigator.findOrCreate({
                 where: {
-                    project_id: project_id
+                    project_id: req.params.project_id,
+                    investigator_id: req.params.investigator_id
                 }
             })
-        )
-        .then( result => response.json(result) )
-        .catch( err => {
-            console.error(err);
-            response.status(400).send(err);
-        });
+            .then( () =>
+                models.project.findOne({
+                    where: { project_id: req.params.project_id },
+                    include: [
+                        { model: models.investigator },
+                    ]
+                })
+            )
+        );
     });
 
-    app.get('/pubchase', function(request, response) {
-        console.log('GET /pubchase');
+    app.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
-        models.pubchase.findAll()
-        .then( data => response.json(data) );
-    });
+        // TODO check permissions on project
 
-    app.get('/publications', function(request, response) {
-        console.log('GET /publications');
-
-        models.publication.findAll({
-            attributes: [ 'publication_id', 'title', 'author' ],
-            include: [
-                { model: models.project 
-                , attributes: [ 'project_id', 'project_name' ]
+        toJsonOrError(res, next,
+            models.project_to_investigator.destroy({
+                where: {
+                    project_id: req.params.project_id,
+                    investigator_id: req.params.investigator_id
                 }
-            ]
-        })
-        .then( data => response.json(data) );
+            })
+        );
     });
 
-    app.get('/publications/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /publications/' + id);
+    app.delete('/projects/:project_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
-        models.publication.findOne({
-            where: { publication_id: id },
-            include: [
-                { model: models.project },
-                { model: models.project_file
-                , attributes: [ 'project_file_id', 'project_id', 'file', 'description' ]
-                , include: [ { model: models.project_file_type } ]
-                , through: { attributes: [] } // remove connector table from output
+        // TODO check permissions on project
+
+        toJsonOrError(res, next,
+            models.publication.destroy({ // FIXME add on cascade delete
+                where: {
+                    project_id: req.params.project_id
                 }
-            ]
-        })
-        .then( data => {
-            if (!data)
-                throw new Error();
-            response.json(data);
-        })
-        .catch((err) => {
-            console.error("Error: Publication not found");
-            response.status(404).send("Publication not found");
-        });
+            })
+            .then(
+                models.project.destroy({
+                    where: {
+                        project_id: req.params.project_id
+                    }
+                })
+            )
+        );
     });
 
-    app.put('/publications', function(request, response) {
-        console.log('PUT /publications');
-        console.log('request = ', request.body);
-
-        //TODO validate user token
-
-        models.publication.create({
-            project_id: request.body.project_id,
-            title: request.body.title,
-            author: request.body.authors,
-            pub_date: request.body.date,
-            pubmed_id: request.body.pubmed_id,
-            doi: request.body.doi
-        })
-        .then( publication => response.json(publication) )
-        .catch( err => {
-            console.error("Error: cannot create publication", err);
-            response.status(404).send("Cannot create publication");
-        });
+    app.get('/pubchase', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.pubchase.findAll()
+        );
     });
 
-    app.post('/publications/:id(\\d+)', function (request, response) {
-        var id = request.params.id;
-        console.log('POST /publications/' + id);
-        console.log('body = ', request.body);
+    app.get('/publications', function(req, res, next) {
+        toJsonOrError(res, next,
+            models.publication.findAll({
+                attributes: [ 'publication_id', 'title', 'author' ],
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    }
+                ]
+            })
+        );
+    });
 
-        // TODO check token and permissions
-
-        models.publication.update(
-            { title: request.body.title,
-              author: request.body.authors,
-              pub_date: request.body.date,
-              pubmed_id: request.body.pubmed_id,
-              doi: request.body.doi
-            },
-            { where: { publication_id: id } }
-        )
-        .then( result =>
+    app.get('/publications/:id(\\d+)', function(req, res, next) {
+        toJsonOrError(res, next,
             models.publication.findOne({
-                where: { publication_id: id }
+                where: { publication_id: req.params.id },
+                include: [
+                    { model: models.project },
+                    { model: models.project_file
+                    , attributes: [ 'project_file_id', 'project_id', 'file', 'description' ]
+                    , include: [ { model: models.project_file_type } ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
             })
-        )
-        .then( publication => response.json(publication) )
-        .catch((err) => {
-            console.error("Error: " + err);
-            response.status(400).send(err);
-        });
+        );
     });
 
-    app.delete('/publications/:id(\\d+)', function (request, response) {
-        var id = request.params.id;
-        console.log('DELETE /publications/' + id);
+    app.put('/publications', function(req, res, next) {
+        requireAuth(req);
 
-        //TODO check token && permissions
-
-        models.publication.destroy({
-            where: { publication_id: id }
-        })
-        .then( result => response.json(result) )
-        .catch( err => {
-            console.error("Error: Publication not found");
-            response.status(404).send("Publication not found");
-        });
+        toJsonOrError(res, next,
+            models.publication.create({
+                project_id: req.body.project_id,
+                title: req.body.title,
+                author: req.body.authors,
+                pub_date: req.body.date,
+                pubmed_id: req.body.pubmed_id,
+                doi: req.body.doi
+            })
+        );
     });
 
-    app.get('/search/:query', function (request, response) {
-        var query = request.params.query;
-        console.log("GET /search/" + query);
+    app.post('/publications/:id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
-        getSearchResults(query)
-        .then( data => response.json(data) );
+        // TODO check permissions
+
+        toJsonOrError(res, next,
+            models.publication.update(
+                { title: req.body.title,
+                  author: req.body.authors,
+                  pub_date: req.body.date,
+                  pubmed_id: req.body.pubmed_id,
+                  doi: req.body.doi
+                },
+                { where: { publication_id: req.params.iid } }
+            )
+            .then( result =>
+                models.publication.findOne({
+                    where: { publication_id: req.params.id }
+                })
+            )
+        );
     });
 
-    app.get('/search_params', function (request, response) {
-        console.log("GET /search_params");
+    app.delete('/publications/:id(\\d+)', function (req, res, next) {
+        requireAuth(req);
+
+        //TODO check permissions
+
+        toJsonOrError(res, next,
+            models.publication.destroy({
+                where: { publication_id: req.params.id }
+            })
+        );
+    });
+
+    app.get('/search/:query', function (req, res, next) {
+        getSearchResults(req.params.query)
+        .then( data => res.json(data) );
+    });
+
+    app.get('/search_params', function (req, res, next) {
         mongo()
         .then((db)   => getSampleKeys(db))
-        .then((data) => response.json(data))
-        .catch((err) => response.status(500).send(err));
+        .then((data) => res.json(data))
+        .catch((err) => res.status(500).send(err));
     });
 
-    app.post('/search_param_values', jsonParser, function (request, response) {
-      var param = request.body.param;
-      var query = request.body.query;
-      console.log("POST /search_params_values " + param);
+    app.post('/search_param_values', jsonParser, function (req, res, next) {
+      var param = req.body.param;
+      var query = req.body.query;
 
       mongo()
         .then(db =>
           Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
           .then(filterMetaParamValues)
-          .then(data => response.json({[param]: data}))
-          .catch(err => response.status(500).send("Error: " + JSON.stringify(err)));
+          .then(data => res.json({[param]: data}))
+          .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
     });
 
-    app.get('/samples/:id(\\d+)', function (request, response) {
-        var id = request.params.id;
-        console.log('GET /samples/' + id);
+    app.get('/samples/:id(\\d+)', function (req, res, next) {
+        toJsonOrError(res, next,
+            Promise.all([
+                models.sample.findOne({
+                    where: { sample_id: req.params.id },
+                    include: [
+                        { model: models.project },
+                        { model: models.investigator
+                        , through: { attributes: [] } // remove connector table from output
+                        },
+                        { model: models.sample_file,
+                          include: [
+                            { model: models.sample_file_type }
+                          ]
+                        },
+                        { model: models.ontology
+                        , through: { attributes: [] } // remove connector table from output
+                        },
+                        { model: models.assembly },
+                        { model: models.combined_assembly },
+                        { model: models.sample_attr,
+                          include: [
+                              { model: models.sample_attr_type,
+                                include: [ models.sample_attr_type_alias ]
+                              }
+                          ]
+                        },
+                        { model: models.user
+                        , attributes: ['user_id', 'user_name']
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                    ]
+                }),
 
-        Promise.all([
-            models.sample.findOne({
-                where: { sample_id: id },
-                include: [
-                    { model: models.project },
-                    { model: models.investigator
-                    , through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.sample_file,
-                      include: [
-                        { model: models.sample_file_type }
-                      ]
-                    },
-                    { model: models.ontology
-                    , through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.assembly },
-                    { model: models.combined_assembly },
-                    { model: models.sample_attr,
-                      include: [
-                          { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
-                          }
-                      ]
-                    },
-                    { model: models.user
-                    , attributes: ['user_id', 'user_name']
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                ]
-            }),
+                models.uproc_pfam_result.count({
+                    where: { sample_id: req.params.id },
+                }),
 
-            models.uproc_pfam_result.count({
-                where: { sample_id: id },
-            }),
+                models.uproc_pfam_result.count({
+                    where: { sample_id: req.params.id },
+                }),
 
-            models.uproc_pfam_result.count({
-                where: { sample_id: id },
-            }),
-
-            models.sample_to_centrifuge.count({
-                where: { sample_id: id }
+                models.sample_to_centrifuge.count({
+                    where: { sample_id: req.params.id }
+                })
+            ])
+            .then( results => {
+                var sample = results[0];
+                sample.dataValues.protein_count = results[1] + results[2];
+                sample.dataValues.centrifuge_count = results[3];
+                return sample;
             })
-        ])
-        .then( results => {
-            var sample = results[0];
-            sample.dataValues.protein_count = results[1] + results[2];
-            sample.dataValues.centrifuge_count = results[3];
-            response.json(sample);
-        })
-        .catch((err) => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
-        });
+        );
     });
 
-    app.get('/samples/:id(\\d+)/proteins', function (request, response) {
-        var id = request.params.id;
-        console.log('GET /samples/' + id + '/proteins');
+    app.get('/samples/:id(\\d+)/proteins', function (req, res, next) {
+        toJsonOrError(res, next,
+            Promise.all([
+                models.uproc_pfam_result.findAll({
+                    where: { sample_id: req.params.id },
+                    include: [{
+                        model: models.pfam_annotation,
+                        attributes: [ 'accession', 'identifier', 'name', 'description' ]
+                    }]
+                }),
 
-        Promise.all([
-            models.uproc_pfam_result.findAll({
-                where: { sample_id: id },
-                include: [{
-                    model: models.pfam_annotation,
-                    attributes: [ 'accession', 'identifier', 'name', 'description' ]
-                }]
-            }),
+                models.uproc_kegg_result.findAll({
+                    where: { sample_id: req.params.id },
+                    include: [{
+                        model: models.kegg_annotation,
+                        attributes: [ 'name', 'definition', 'pathway', 'module' ]
+                    }]
+                })
+            ])
+            .then( results => {
+                return {
+                    pfam: results[0],
+                    kegg: results[1]
+                };
+            })
+        );
+    });
 
-            models.uproc_kegg_result.findAll({
-                where: { sample_id: id },
+    app.get('/samples/:id(\\d+)/centrifuge_results', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.sample_to_centrifuge.findAll({
+                where: { sample_id: req.params.id },
+                attributes: [ 'sample_to_centrifuge_id', 'num_reads', 'num_unique_reads', 'abundance' ],
                 include: [{
-                    model: models.kegg_annotation,
-                    attributes: [ 'name', 'definition', 'pathway', 'module' ]
+                    model: models.centrifuge,
                 }]
             })
-        ])
-        .then( results => {
-            response.json({
-                pfam: results[0],
-                kegg: results[1]
-            });
-        })
-        .catch((err) => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
-        });
+        );
     });
 
-    app.get('/samples/:id(\\d+)/centrifuge_results', function (request, response) {
-        var id = request.params.id;
-        console.log('GET /samples/' + id + '/centrifuge_results');
-
-        models.sample_to_centrifuge.findAll({
-            where: { sample_id: id },
-            attributes: [ 'sample_to_centrifuge_id', 'num_reads', 'num_unique_reads', 'abundance' ],
-            include: [{
-                model: models.centrifuge,
-            }]
-        })
-        .then( results => response.json(results) )
-        .catch((err) => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
-        });
-    });
-
-    app.get('/samples', function(request, response) {
-        console.log('GET /samples', request.query);
-
+    app.get('/samples', function(req, res, next) {
         var params = {
             attributes:
                 [ 'sample_id'
@@ -1049,145 +835,106 @@ module.exports = function(app) {
             ]
         };
 
-        if (typeof request.query.id !== 'undefined') {
-            var ids = request.query.id.split(',');
+        if (typeof req.query.id !== 'undefined') {
+            var ids = req.query.id.split(',');
             params.where = { sample_id: { in: ids } };
         }
 
-        models.sample.findAll(params)
-        .then( sample => response.json(sample) )
-        .catch((err) => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
-        });
+        toJsonOrError(res, next,
+            models.sample.findAll(params)
+        );
     });
 
-    app.put('/samples', function(request, response) {
-        console.log('PUT /samples');
+    app.put('/samples', function(req, res, next) {
+        requireAuth(req);
 
         //TODO check permissions on parent project
 
-        var sample_name = request.body.sample_name;
-        var project_id = request.body.project_id;
-        if (!sample_name || !project_id) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('sample_name = ' + sample_name);
-        console.log('project_id = ' + project_id);
+        var sample_name = req.body.sample_name;
+        var project_id = req.body.project_id;
 
-        validateAgaveToken(request)
-        .then( profile =>
-            models.user.findOne({
-                where: { user_name: profile.username }
-            })
-        )
-        .then( user =>
+        errorOnNull(sample_name, project_id);
+
+        toJsonOrError(res, next,
             models.sample.create({
                 sample_name: sample_name,
                 sample_code: "__"+sample_name,
                 project_id: project_id,
                 private: 1,
                 sample_to_users: [
-                    { user_id : user.user_id
+                    { user_id : req.auth.user.user_id
                     , permission: 1
                     }
                 ]
             },
             { include: [ models.sample_to_user ]
             })
-        )
-        .then( sample => {
-            return models.sample.findOne({
-                where: { sample_id: sample.sample_id },
-                include: [
-                    { model: models.project }
-                ]
+            .then( sample => {
+                return models.sample.findOne({
+                    where: { sample_id: sample.sample_id },
+                    include: [
+                        { model: models.project }
+                    ]
+                })
             })
-        })
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: cannot create sample", err);
-            response.status(404).send("Cannot create sample");
-        });
+        );
     });
 
-    app.post('/samples/:id(\\d+)', function (request, response) {
-        var id = request.params.id;
-        console.log('POST /samples/' + id);
+    app.post('/samples/:id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
         // TODO check permissions on sample
 
-        var sample_name = request.body.sample_name;
-        var sample_code = request.body.sample_code;
-        var sample_type = request.body.sample_type;
-        console.log('sample_name = ' + sample_name);
-        console.log('sample_code = ' + sample_code);
-        console.log('sample_type = ' + sample_type);
-
-        models.sample.update(
-            { sample_name: sample_name,
-              sample_acc: sample_code,
-              sample_type: sample_type
-            },
-            { where: { sample_id: id } }
-        )
-        .then( result =>
-            models.sample.findOne({
-                where: { sample_id: id },
-                include: [
-                    { model: models.project },
-                ]
-            })
-        )
-        .then( sample => response.json(sample) )
-        .catch((err) => {
-            console.error("Error: " + err);
-            response.status(400).send(err);
-        });
+        toJsonOrError(res, next,
+            models.sample.update(
+                { sample_name: req.body.sample_name,
+                  sample_acc: req.body.sample_code,
+                  sample_type: req.body.sample_type
+                },
+                { where: { sample_id: req.params.id } }
+            )
+            .then( result =>
+                models.sample.findOne({
+                    where: { sample_id: req.params.id },
+                    include: [
+                        { model: models.project },
+                    ]
+                })
+            )
+        );
     });
 
-    app.delete('/samples/:sample_id(\\d+)', function (request, response) {
-        var sample_id = request.params.sample_id;
-        console.log('DELETE /samples/' + sample_id);
+    app.delete('/samples/:sample_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
-        //TODO check token && permissions
+        //TODO check permissions
 
         models.sample_file.destroy({
-            where: { sample_id: sample_id }
+            where: { sample_id: req.params.sample_id }
         })
-        .then( models.sample.destroy({
-            where: { sample_id: sample_id }
-        }) )
-        .then( result => response.json(result) )
-        .catch( err => {
-            console.error(err);
-            response.status(400).send(err);
-        });
+        .then(
+            models.sample.destroy({
+                where: { sample_id: req.params.sample_id }
+            })
+        )
+        .then( res.send("1") )
+        .catch(next);
     });
 
-    app.put('/samples/:sample_id(\\d+)/attributes', function(request, response) {
-        var sample_id = request.params.sample_id;
-        console.log('PUT /samples/' + sample_id + '/attributes');
+    app.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
+        requireAuth(req);
 
-        var attr_type = request.body.attr_type;
-        var attr_aliases = request.body.attr_aliases;
-        var attr_value = request.body.attr_value;
-        if (!sample_id || !attr_type || !attr_value) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('attr_type = ' + attr_type);
-        console.log('attr_aliases = ' + attr_aliases);
-        console.log('attr_value = ' + attr_value);
+        var sample_id = req.params.sample_id;
+        var attr_type = req.body.attr_type;
+        var attr_aliases = req.body.attr_aliases;
+        var attr_value = req.body.attr_value;
 
-        validateAgaveToken(request)
-        .then( profile =>
+        errorOnNull(sample_id, attr_type, attr_value);
+
+        toJsonOrError(res, next,
             // Check permissions on parent project/sample
             models.user.findOne({
-                where: { user_name: profile.username },
+                where: { user_name: req.auth.profile.username },
                 include: [
                     { model: models.sample
                     , where: { sample_id: sample_id }
@@ -1201,189 +948,165 @@ module.exports = function(app) {
                     }
                 ]
             })
-        )
-        .then( user => {
-            if (user.samples && user.samples.length > 0) {
-                return user.samples[0];
-            }
-            else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
-                return user.projects[0].samples[0];
-            }
-            else {
-                console.log("Error: permission denied");
-                response.status(403).send("Error: permission denied");
-                return;
-            }
-        })
-        .then( sample =>
-            models.sample_attr_type.findOrCreate({
-                where: { type: attr_type }
-            })
-            .spread( (sample_attr_type, created) => {
-                console.log("type created: ", created);
-                return sample_attr_type
-            })
-        )
-        .then( sample_attr_type =>
-            models.sample_attr.findOrCreate({
-                    where: {
-                        sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                        sample_id: sample_id,
-                        attr_value: attr_value
-                    }
-                })
-                .spread( (sample_attr, created) => {
-                    console.log("attr created: ", created);
-                })
-        )
-        .then( () =>
-            models.sample.findOne({
-                where: { sample_id: sample_id },
-                include: [
-                    { model: models.project },
-                    { model: models.sample_attr,
-                      include: [
-                          { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
-                          }
-                      ]
-                    }
-                ]
-            })
-        )
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: cannot create sample attribute", err);
-            response.status(404).send("Cannot create sample attribute");
-        });
-    });
-
-    app.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(request, response) {
-        var sample_id = request.params.sample_id;
-        var attr_id = request.params.attr_id;
-        console.log('PUT /samples/' + sample_id + '/attributes/' + attr_id);
-
-        var attr_type = request.body.attr_type;
-        var attr_aliases = request.body.attr_aliases;
-        var attr_value = request.body.attr_value;
-        if (!sample_id || !attr_id || !attr_type || !attr_value) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('attr_type = ' + attr_type);
-        console.log('attr_aliases = ' + attr_aliases);
-        console.log('attr_value = ' + attr_value);
-
-        validateAgaveToken(request)
-        .then( profile =>
-            // Check permissions on parent project/sample
-            models.user.findOne({
-                where: { user_name: profile.username },
-                include: [
-                    { model: models.sample
-                    , where: { sample_id: sample_id }
-                    },
-                    { model: models.project
-                    , include: [
-                        { model: models.sample
-                        , where: { sample_id: sample_id }
-                        }
-                      ]
-                    }
-                ]
-            })
-        )
-        .then( user => {
-            if (user.samples && user.samples.length > 0) {
-                return user.samples[0];
-            }
-            else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
-                return user.projects[0].samples[0];
-            }
-            else {
-                console.log("Error: permission denied");
-                response.status(403).send("Error: permission denied");
-                return;
-            }
-        })
-        .then( sample =>
-            models.sample_attr_type.findOrCreate({
-                where: { type: attr_type }
-            })
-            .spread( (sample_attr_type, created) => {
-                console.log("type created: ", created);
-                return sample_attr_type
-            })
-        )
-        .then( sample_attr_type =>
-            models.sample_attr.update(
-                { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                  attr_value: attr_value
-                },
-                { where: {
-                    sample_attr_id: attr_id
-                  }
+            .then( user => {
+                if (user.samples && user.samples.length > 0) {
+                    return user.samples[0];
                 }
+                else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
+                    return user.projects[0].samples[0];
+                }
+                else {
+                    console.log("Error: permission denied");
+                    res.status(403).send("Error: permission denied");
+                    return;
+                }
+            })
+            .then( sample =>
+                models.sample_attr_type.findOrCreate({
+                    where: { type: attr_type }
+                })
+                .spread( (sample_attr_type, created) => {
+                    console.log("type created: ", created);
+                    return sample_attr_type
+                })
             )
-        )
-        .then( () =>
-            models.sample.findOne({
-                where: { sample_id: sample_id },
+            .then( sample_attr_type =>
+                models.sample_attr.findOrCreate({
+                        where: {
+                            sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                            sample_id: sample_id,
+                            attr_value: attr_value
+                        }
+                    })
+                    .spread( (sample_attr, created) => {
+                        console.log("attr created: ", created);
+                    })
+            )
+            .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: sample_id },
+                    include: [
+                        { model: models.project },
+                        { model: models.sample_attr,
+                          include: [
+                              { model: models.sample_attr_type,
+                                include: [ models.sample_attr_type_alias ]
+                              }
+                          ]
+                        }
+                    ]
+                })
+            )
+        );
+    });
+
+    app.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(req, res, next) {
+        requireAuth(req);
+
+        var sample_id = req.params.sample_id;
+        var attr_id = req.params.attr_id;
+        var attr_type = req.body.attr_type;
+        var attr_aliases = req.body.attr_aliases;
+        var attr_value = req.body.attr_value;
+
+        errorOnNull(sample_id, attr_id, attr_type, attr_value);
+
+        toJsonOrError(res, next,
+            // Check permissions on parent project/sample
+            models.user.findOne({
+                where: { user_name: profile.username },
                 include: [
-                    { model: models.project },
-                    { model: models.sample_attr,
-                      include: [
-                          { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
-                          }
+                    { model: models.sample
+                    , where: { sample_id: sample_id }
+                    },
+                    { model: models.project
+                    , include: [
+                        { model: models.sample
+                        , where: { sample_id: sample_id }
+                        }
                       ]
                     }
                 ]
             })
-        )
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: cannot update sample attribute", err);
-            response.status(404).send("Cannot update sample attribute");
-        });
-    });
-
-    app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (request, response) {
-        var sample_id = request.params.sample_id;
-        var attr_id = request.params.attr_id;
-        console.log('DELETE /samples/' + sample_id + '/attributes/' + attr_id);
-
-        //TODO check token && permissions
-
-        models.sample_attr.destroy({
-            where: { sample_attr_id: attr_id }
-        })
-        .then( () => {
-            return models.sample.findOne({
-                where: { sample_id: sample_id },
-                include: [
-                    { model: models.project },
-                    { model: models.sample_attr,
-                      include: [
-                          { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
-                          }
-                      ]
-                    }
-                ]
+            .then( user => {
+                if (user.samples && user.samples.length > 0) {
+                    return user.samples[0];
+                }
+                else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
+                    return user.projects[0].samples[0];
+                }
+                else {
+                    console.log("Error: permission denied");
+                    res.status(403).send("Error: permission denied");
+                    return;
+                }
             })
-        })
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: Sample attribute not found");
-            response.status(404).send("Sample attribute not found");
-        });
+            .then( sample =>
+                models.sample_attr_type.findOrCreate({
+                    where: { type: attr_type }
+                })
+                .spread( (sample_attr_type, created) => {
+                    console.log("type created: ", created);
+                    return sample_attr_type
+                })
+            )
+            .then( sample_attr_type =>
+                models.sample_attr.update(
+                    { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                      attr_value: attr_value
+                    },
+                    { where: {
+                        sample_attr_id: attr_id
+                      }
+                    }
+                )
+            )
+            .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: sample_id },
+                    include: [
+                        { model: models.project },
+                        { model: models.sample_attr,
+                          include: [
+                              { model: models.sample_attr_type,
+                                include: [ models.sample_attr_type_alias ]
+                              }
+                          ]
+                        }
+                    ]
+                })
+            )
+        );
     });
 
-    app.get('/samples/files', function(request, response) {
-        console.log('GET /samples/files', request.query); // query is comma-separated list of sample IDs
+    app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
+        //TODO check permissions
+
+        toJsonOrError(res, next,
+            models.sample_attr.destroy({
+                where: { sample_attr_id: req.params.attr_id }
+            })
+            .then( () => {
+                return models.sample.findOne({
+                    where: { sample_id: req.params.sample_id },
+                    include: [
+                        { model: models.project },
+                        { model: models.sample_attr,
+                          include: [
+                              { model: models.sample_attr_type,
+                                include: [ models.sample_attr_type_alias ]
+                              }
+                          ]
+                        }
+                    ]
+                })
+            })
+        );
+    });
+
+    app.get('/samples/files', function(req, res, next) {
         var params = {
             attributes:
                 [ 'sample_file_id'
@@ -1400,270 +1123,370 @@ module.exports = function(app) {
             ]
         };
 
-        if (typeof request.query.id !== 'undefined') {
-            var ids = request.query.id.split(',');
+        if (typeof req.query.id !== 'undefined') {
+            var ids = req.query.id.split(',');
             params.where = { sample_id: { in: ids } };
         }
 
-        models.sample_file.findAll(params)
-        .then( sample => response.json(sample) )
-        .catch((err) => {
-            console.error("Error: Sample not found");
-            response.status(404).send("Sample not found");
-        });
+        toJsonOrError(res, next,
+            models.sample_file.findAll(params)
+        );
     });
 
-    app.put('/samples/:sample_id/files', function(request, response) {
-        var sample_id = request.params.sample_id;
-        console.log('PUT /samples/' + sample_id + '/files');
+    app.put('/samples/:sample_id/files', function(req, res, next) {
+        requireAuth(req);
 
-        //TODO check permissions on parent project/sample
+        //TODO check permissions
 
-        var files = request.body.files;
-        if (!files) {
-            console.log("Error: missing required field");
-            response.status(400).send("Error: missing required field");
-            return;
-        }
-        console.log('files = ' + files);
+        var files = req.body.files;
 
-        validateAgaveToken(request)
-        .then( profile =>
-            models.user.findOne({
-                where: { user_name: profile.username }
-            })
-        )
-        .then( () => {
-            return Promise.all(
+        errorOnNull(files);
+
+        toJsonOrError(res, next,
+            Promise.all(
                 files.map( file =>
                     models.sample_file.findOrCreate({
                         where: {
-                            sample_id: sample_id,
+                            sample_id: req.params.sample_id,
                             sample_file_type_id: 1,
                             file
                         }
                     })
                 )
-            );
-        })
-        .then( () => {
-            return models.sample.findOne({
-                where: { sample_id: sample_id },
-                include: [
-                    { model: models.project },
-                    { model: models.sample_file,
-                      include: [
-                        { model: models.sample_file_type,
-                          attributes: [ 'sample_file_type_id', 'type' ]
+            )
+            .then( () => {
+                return models.sample.findOne({
+                    where: { sample_id: req.params.sample_id },
+                    include: [
+                        { model: models.project },
+                        { model: models.sample_file,
+                          include: [
+                            { model: models.sample_file_type,
+                              attributes: [ 'sample_file_type_id', 'type' ]
+                            }
+                          ]
                         }
-                      ]
-                    }
-                ]
+                    ]
+                })
             })
-        })
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: cannot create sample", err);
-            response.status(404).send("Cannot create sample");
-        });
+        );
     });
 
-    app.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (request, response) {
-        var sample_id = request.params.sample_id;
-        var file_id = request.params.file_id;
-        console.log('DELETE /samples/' + sample_id + '/files/' + file_id);
+    app.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
-        //TODO check token && permissions
+        //TODO check permissions
 
-        models.sample_file.destroy({
-            where: { sample_file_id: file_id }
-        })
-        .then( () => {
-            return models.sample.findOne({
-                where: { sample_id: sample_id },
-                include: [
-                    { model: models.project },
-                    { model: models.sample_file,
-                      include: [
-                        { model: models.sample_file_type,
-                          attributes: [ 'sample_file_type_id', 'type' ]
-                        }
-                      ]
-                    }
-                ]
+        toJsonOrError(res, next,
+            models.sample_file.destroy({
+                where: { sample_file_id: req.params.file_id }
             })
-        })
-        .then( sample => response.json(sample) )
-        .catch( err => {
-            console.error("Error: Sample file not found");
-            response.status(404).send("Sample file not found");
-        });
+            .then( () => {
+                return models.sample.findOne({
+                    where: { sample_id: req.params.sample_id },
+                    include: [
+                        { model: models.project },
+                        { model: models.sample_file,
+                          include: [
+                            { model: models.sample_file_type,
+                              attributes: [ 'sample_file_type_id', 'type' ]
+                            }
+                          ]
+                        }
+                    ]
+                })
+            })
+        );
     });
 
-    app.post('/samples/search', jsonParser, function (request, response) {
-        console.log("POST /samples/search");
+    app.post('/samples/search', jsonParser, function (req, res, next) {
         mongo()
-        .then((db)   => getMetaSearchResults(db, request.body))
-        .then((data) => response.json(data))
-        .catch((err) => response.status(500).send("Err: " + err));
+        .then((db)   => getMetaSearchResults(db, req.body))
+        .then((data) => res.json(data))
+        .catch(next);
     });
 
-    app.get('/samples/taxonomy_search/:query', function (request, response) {
-        var query = request.params.query;
-        console.log("GET /samples/taxonomy_search/" + query);
-
-        models.centrifuge.findAll({
-            where: sequelize.or(
-                { tax_id: query },
-                { name: { $like: '%'+query+'%' } }
-            ),
-            include: [
-                { model: models.sample,
-                  attributes: [ 'sample_id', 'sample_name', 'project_id' ],
-                  include: [
-                    { model: models.project,
-                      attributes: [ 'project_id', 'project_name' ]
+    app.get('/samples/taxonomy_search/:query', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.centrifuge.findAll({
+                where: sequelize.or(
+                    { tax_id: query },
+                    { name: { $like: '%'+req.params.query+'%' } }
+                ),
+                include: [
+                    { model: models.sample,
+                      attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                      include: [
+                        { model: models.project,
+                          attributes: [ 'project_id', 'project_name' ]
+                        }
+                      ]
                     }
-                  ]
-                }
-            ]
-        })
-        .then( results => response.json(results) )
-        .catch((err) => response.status(500).send("Err: " + err));
+                ]
+            })
+        );
     });
 
-    app.get('/samples/protein_search/:db/:query', function (request, response) {
-        var db = request.params.db.toUpperCase();
-        var query = request.params.query.toUpperCase();
-        console.log("GET /samples/protein_search/" + db + "/" + query);
+    app.get('/samples/protein_search/:db/:query', function (req, res, next) {
+        var db = req.params.db.toUpperCase();
+        var query = req.params.query.toUpperCase();
 
         if (db == "PFAM") {
-            models.pfam_annotation.findAll({
-                where: sequelize.or(
-                    { accession: query },
-                    { identifier: query }
-                    //{ name: { $like: '%'+query+'%' } },           // removed, very slow
-                    //{ description: { $like: '%'+query+'%' } }
-                ),
-                include: [
-                    { model: models.uproc_pfam_result,
-                      attributes: [ 'sample_to_uproc_id', 'read_count' ],
-                      include: [{
-                        model: models.sample,
-                        attributes: [ 'sample_id', 'sample_name', 'project_id' ],
-                        include: [
-                            { model: models.project,
-                              attributes: [ 'project_id', 'project_name' ]
-                            }
-                          ]
-                      }]
-                    }
-                ]
-            })
-            .then( results => response.json(results) );
+            toJsonOrError(res, next,
+                models.pfam_annotation.findAll({
+                    where: sequelize.or(
+                        { accession: query },
+                        { identifier: query }
+                        //{ name: { $like: '%'+query+'%' } },           // removed, very slow
+                        //{ description: { $like: '%'+query+'%' } }
+                    ),
+                    include: [
+                        { model: models.uproc_pfam_result,
+                          attributes: [ 'sample_to_uproc_id', 'read_count' ],
+                          include: [{
+                            model: models.sample,
+                            attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                            include: [
+                                { model: models.project,
+                                  attributes: [ 'project_id', 'project_name' ]
+                                }
+                              ]
+                          }]
+                        }
+                    ]
+                })
+            );
         }
         else if (db == "KEGG") {
-            models.kegg_annotation.findAll({
-                where: sequelize.or(
-                    { kegg_annotation_id: query },
-                    { name: { $like: '%'+query+'%' } }
-                    //{ definition: { $like: '%'+query+'%' } },     // removed, very slow
-                    //{ pathway: { $like: '%'+query+'%' } }
-                ),
+            toJsonOrError(res, next,
+                models.kegg_annotation.findAll({
+                    where: sequelize.or(
+                        { kegg_annotation_id: query },
+                        { name: { $like: '%'+query+'%' } }
+                        //{ definition: { $like: '%'+query+'%' } },     // removed, very slow
+                        //{ pathway: { $like: '%'+query+'%' } }
+                    ),
+                    include: [
+                        { model: models.uproc_kegg_result,
+                          attributes: [ 'uproc_kegg_result_id', 'read_count' ],
+                          include: [{
+                            model: models.sample,
+                            attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                            include: [
+                                { model: models.project,
+                                  attributes: [ 'project_id', 'project_name' ]
+                                }
+                              ]
+                          }]
+                        }
+                    ]
+                })
+            );
+        }
+        else {
+            res.json([]);
+        }
+    });
+
+    app.get('/users', function(req, res, next) {
+        requireAuth(req);
+
+        toJsonOrError(res, next,
+            models.user.findAll()
+        );
+    });
+
+    app.get('/users/:id(\\d+)', function(req, res, next) {
+        requireAuth(req);
+
+        toJsonOrError(res, next,
+            models.user.findOne({
+                where: { user_id: req.params.id },
                 include: [
-                    { model: models.uproc_kegg_result,
-                      attributes: [ 'uproc_kegg_result_id', 'read_count' ],
-                      include: [{
-                        model: models.sample,
-                        attributes: [ 'sample_id', 'sample_name', 'project_id' ],
-                        include: [
-                            { model: models.project,
-                              attributes: [ 'project_id', 'project_name' ]
-                            }
-                          ]
-                      }]
+                    { model: models.project,
+                      through: { attributes: [] }, // remove connector table from output
+                      include: [
+                        { model: models.investigator,
+                          through: { attributes: [] } // remove connector table from output
+                        },
+                        { model: models.publication }
+                      ]
+                    },
+                    { model: models.sample,
+                      through: { attributes: [] }, // remove connector table from output
+                      include: [
+                        { model: models.sample_file }
+                      ]
                     }
                 ]
             })
-            .then( results => response.json(results) );
-        }
-        else {
-            response.json([]);
-        }
+        );
     });
 
-    app.get('/users', function(request, response) {
-        console.log('GET /users');
+    app.get('/users/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
+        requireAuth(req);
 
-        models.user.findAll()
-        .then( data => response.json(data) );
+        toJsonOrError(res, next,
+            models.user.findOne({
+                where: { user_name: req.params.name }
+            })
+        );
     });
 
-    app.get('/users/:id(\\d+)', function(request, response) {
-        var id = request.params.id;
-        console.log('GET /users/' + id);
+    app.post('/users/login', function(req, res, next) {
+        requireAuth(req);
 
-        models.user.findOne({
-            where: { user_id: id },
-            include: [
-                { model: models.project,
-                  through: { attributes: [] }, // remove connector table from output
-                  include: [
-                    { model: models.investigator,
-                      through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.publication }
-                  ]
-                },
-                { model: models.sample,
-                  through: { attributes: [] }, // remove connector table from output
-                  include: [
-                    { model: models.sample_file }
-                  ]
-                }
-            ]
+        var user_name = req.body.user_name; // FIXME get username from token
+        errorOnNull(user_name);
+
+        models.user.findOrCreate({
+            where: { user_name: user_name }
         })
-        .then( data => {
-            if (!data)
-                throw new Error();
-            response.json(data);
+        .spread( (user, created) => {
+            models.login.create({
+                user_id: user.user_id,
+                login_date: sequelize.fn('NOW'),
+            })
+            .then( login =>
+                res.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
+                    login_id: login.login_id,
+                    user: user
+                })
+            );
         })
-        .catch((err) => {
-            console.error(err);
-            response.status(404).send(err.toString);
-        });
+        .catch(next);
     });
 
-    app.get('/users/:name([\\w\\.\\-\\_]+)', function(request, response) {
-        var name = request.params.name;
-        console.log('GET /users/' + name);
-
-        models.user.findOne({
-            where: { user_name: name }
-        })
-        .then( data => {
-            if (!data)
-                throw new Error();
-            response.json(data);
-        })
-        .catch((err) => {
-            console.error("Error: User not found");
-            response.status(404).send("User not found");
-        });
-    });
-
-    app.get('/', function(request, response) {
+    app.get('/', function(req, res, next) {
         var routes = app._router.stack        // registered routes
                      .filter(r => r.route)    // take out all the middleware
-                     .map(r => r.route.path)
-        response.json({ "routes": routes });
+                     .map(r => r.route.path);
+        res.json({ "routes": routes });
     });
 
+    app.use(errorHandler);
+
     // catch-all function
-    app.get('*', function(request, response){
-        response.status(404).send("Unknown route: " + request.path);
+    app.get('*', function(req, res, next){
+        res.status(404).send("Unknown route: " + req.path);
     });
 };
+
+function requestLogger(req, res, next) {
+    console.log(["REQUEST:", req.method, req.url].join(" ").concat(" ").padEnd(80, "-"));
+    next();
+}
+
+function errorHandler(error, req, res, next) {
+    console.log("ERROR ".padEnd(80, "!"));
+    console.log(error.stack);
+
+    let statusCode = error.statusCode || 500;
+    let message = error.message || "Unknown error";
+
+    res.status(statusCode).send(message);
+}
+
+function toJsonOrError(res, next, promise) {
+    promise
+    .then(result => {
+        if (!result)
+            throw(new MyError("Not found", 404));
+        else {
+            res.json(result);
+            console.log("RESPONSE ".padEnd(80, "-"));
+        }
+    })
+    .catch(next);
+}
+
+function errorOnNull() {
+    if (arguments) {
+        var notNull = Object.values(arguments).every( x => { return (typeof x !== "undefined") } );
+        if (!notNull)
+            throw(ERR_BAD_REQUEST);
+    }
+}
+
+function requireAuth(req) {
+    if (!req || !req.auth || !req.auth.validToken && !req.auth.user)
+        throw(ERR_UNAUTHORIZED);
+}
+
+function agaveTokenValidator(req, res, next) {
+    req.auth = {};
+
+    validateAgaveToken(req, false)
+    .then( profile => {
+        req.auth.validToken = true;
+        req.auth.profile = profile;
+        if (profile) {
+            return models.user.findOne({
+                where: { user_name: profile.username }
+            });
+        }
+
+        return null;
+    })
+    .then( user => {
+        req.auth.user = user;
+    })
+    .finally(next);
+}
+
+function validateAgaveToken(req, isTokenRequired) {
+    isTokenRequired = typeof isTokenRequired === 'undefined' ? true : isTokenRequired;
+
+    return new Promise((resolve, reject) => {
+        var token;
+        if (req && req.headers)
+            token = req.headers.authorization;
+
+        if (!token) {
+            if (isTokenRequired) {
+                console.log('Error: Authorization token missing: headers = ', req.headers);
+                reject(new Error('Authorization token missing'));
+            }
+            else {
+                resolve();
+            }
+        }
+        console.log("validateAgaveToken: token", token);
+
+        const profilereq = https.request(
+            {   method: 'GET',
+                host: 'agave.iplantc.org',
+                port: 443,
+                path: '/profiles/v2/me',
+                headers: {
+                    Authorization: token
+                }
+            },
+            res => {
+                res.setEncoding("utf8");
+                if (res.statusCode < 200 || res.statusCode > 299) {
+                    reject(new Error('Failed to load page, status code: ' + res.statusCode));
+                }
+
+                var body = [];
+                res.on('data', (chunk) => body.push(chunk));
+                res.on('end', () => {
+                    body = body.join('');
+                    var data = JSON.parse(body);
+                    if (!data || data.status != "success")
+                        reject(new Error('Status ' + data.status));
+                    else {
+                        console.log("validateAgaveToken: *** success ***");
+                        data.result.token = token;
+                        resolve(data.result);
+                    }
+                });
+            }
+        );
+        profilereq.on('error', (err) => reject(err));
+        profilereq.end();
+    });
+}
 
 function getSearchResults(query) {
   return new Promise(function (resolve, reject) {
@@ -1817,48 +1640,4 @@ function getMetaSearchResults(db, query) {
       reject("Bad query (" + JSON.stringify(query) + ")");
     }
   });
-}
-
-function validateAgaveToken(request) {
-    return new Promise((resolve, reject) => {
-        var token;
-        if (!request.headers || !request.headers.authorization) {
-            console.log('Error: Authorizaiton token missing: headers = ', request.headers);
-            reject(new Error('Authorization token missing'));
-        }
-        token = request.headers.authorization;
-        console.log("token:", token);
-
-        const profileRequest = https.request(
-            {   method: 'GET',
-                host: 'agave.iplantc.org',
-                port: 443,
-                path: '/profiles/v2/me',
-                headers: {
-                    Authorization: token
-                }
-            },
-            response => {
-                response.setEncoding("utf8");
-                if (response.statusCode < 200 || response.statusCode > 299) {
-                    reject(new Error('Failed to load page, status code: ' + response.statusCode));
-                }
-
-                var body = [];
-                response.on('data', (chunk) => body.push(chunk));
-                response.on('end', () => {
-                    body = body.join('');
-                    var data = JSON.parse(body);
-                    if (!data || data.status != "success")
-                        reject(new Error('Status ' + data.status));
-                    else {
-                        data.result.token = token;
-                        resolve(data.result);
-                    }
-                });
-            }
-        );
-        profileRequest.on('error', (err) => reject(err));
-        profileRequest.end();
-    });
 }
