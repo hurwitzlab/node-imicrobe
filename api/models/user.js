@@ -13,6 +13,14 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: false,
       unique: true
     },
+    first_name: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    last_name: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
     date: {
       type: DataTypes.TIME,
       allowNull: false,

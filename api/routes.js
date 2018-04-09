@@ -370,7 +370,7 @@ module.exports = function(app) {
                         , attributes: [ 'project_group_id', 'group_name' ]
                         },
                         { model: models.user
-                        , attributes: [ 'user_id', 'user_name' ]
+                        , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name' ]
                         , through: { attributes: [] } // remove connector table from output
                         }
                     ]
