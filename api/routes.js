@@ -29,6 +29,17 @@ const ERR_UNAUTHORIZED = new MyError("Unauthorized", 401);
 const ERR_NOT_FOUND = new MyError("Not found", 404);
 
 
+// Reusable sub-queries
+
+const ATTR_PERMISSION = // Convert "permission" field to a string
+    [ sequelize.literal(
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
+            'FROM project_to_user WHERE project_to_user.user_id = users.user_id)'
+      ),
+      'permission'
+    ]
+
+
 //TODO split up into modules
 module.exports = function(app) {
     app.use(cors());
@@ -370,7 +381,9 @@ module.exports = function(app) {
                         , attributes: [ 'project_group_id', 'group_name' ]
                         },
                         { model: models.user
-                        , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name' ]
+                        , attributes: [
+                            'user_id', 'user_name', 'first_name', 'last_name', ATTR_PERMISSION
+                        ]
                         , through: { attributes: [] } // remove connector table from output
                         }
                     ]
@@ -409,24 +422,6 @@ module.exports = function(app) {
         );
     });
 
-    app.get('/projects/:id(\\d+)/assemblies', function (req, res, next) {
-        toJsonOrError(res, next,
-            models.assembly.findAll({
-                where: { project_id: req.params.id },
-                attributes: [ 'assembly_id', 'assembly_name' ]
-            })
-        );
-    });
-
-    app.get('/projects/:id(\\d+)/combined_assemblies', function (req, res, next) {
-        toJsonOrError(res, next,
-            models.combined_assembly.findAll({
-                where: { project_id: req.params.id },
-                attributes: [ 'combined_assembly_id', 'assembly_name' ]
-            })
-        );
-    });
-
     app.get('/projects', function(req, res, next) {
         toJsonOrError(res, next,
             models.project.findAll({
@@ -443,13 +438,31 @@ module.exports = function(app) {
                     , attributes: ['publication_id', 'title']
                     },
                     { model: models.user
-                    , attributes: ['user_id', 'user_name']
+                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', ATTR_PERMISSION]
                     , through: { attributes: [] } // remove connector table from output
                     },
                 ],
                 attributes: {
                     include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
                 }
+            })
+        );
+    });
+
+    app.get('/projects/:id(\\d+)/assemblies', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.assembly.findAll({
+                where: { project_id: req.params.id },
+                attributes: [ 'assembly_id', 'assembly_name' ]
+            })
+        );
+    });
+
+    app.get('/projects/:id(\\d+)/combined_assemblies', function (req, res, next) {
+        toJsonOrError(res, next,
+            models.combined_assembly.findAll({
+                where: { project_id: req.params.id },
+                attributes: [ 'combined_assembly_id', 'assembly_name' ]
             })
         );
     });
@@ -499,6 +512,7 @@ module.exports = function(app) {
         var project_type = req.body.project_type;
         var project_url = req.body.project_url;
         var domains = req.body.domains;
+        var investigators = req.body.investigators;
         var groups = req.body.groups;
 
         toJsonOrError(res, next,
@@ -527,6 +541,23 @@ module.exports = function(app) {
                     )
                 )
             )
+            .then( () => // remove all investigators from project
+                models.project_to_investigator.destroy({
+                    where: { project_id: project_id }
+                })
+            )
+            .then( () =>
+                Promise.all(
+                    investigators.map( i =>
+                        models.project_to_investigator.findOrCreate({
+                            where: {
+                                project_id: project_id,
+                                investigator_id: i.investigator_id
+                            }
+                        })
+                    )
+                )
+            )
 //            .then( () => // remove all groups from project
 //                models.project_to_project_group.destroy({
 //                    where: { project_id: project_id }
@@ -549,7 +580,8 @@ module.exports = function(app) {
                     where: { project_id: project_id },
                     include: [
                         { model: models.project_group },
-                        { model: models.domain }
+                        { model: models.domain },
+                        { model: models.investigator }
                     ]
                 })
             )
