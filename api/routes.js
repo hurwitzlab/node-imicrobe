@@ -31,13 +31,27 @@ const ERR_NOT_FOUND = new MyError("Not found", 404);
 
 // Reusable sub-queries
 
-const ATTR_PERMISSION = // Convert "permission" field to a string
+const PROJECT_PERMISSION_ATTR = // Convert "permission" field to a string
     [ sequelize.literal(
         '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
             'FROM project_to_user WHERE project_to_user.user_id = users.user_id)'
       ),
       'permission'
     ]
+
+const SAMPLE_PERMISSION_ATTR = // FIXME can this be resolved with above?
+    [ sequelize.literal(
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
+            'FROM project_to_user WHERE project_to_user.user_id = `project->users`.`user_id`)'
+      ),
+      'permission'
+    ]
+
+const PERMISSION_CODES = {
+    "owner": 1,
+    "read-write": 2,
+    "read-only": 3
+}
 
 
 //TODO split up into modules
@@ -353,60 +367,57 @@ module.exports = function(app) {
 
     app.get('/projects/:id(\\d+)', function(req, res, next) {
         toJsonOrError(res, next,
-            Promise.all([
-                models.project.findOne({
-                    where: {
-                        project_id: req.params.id,
-                        $or: [ // check permissions -- DO NOT MODIFY
-                            { private: { $or: [0, null] } },
-                            (req.auth.user ? sequelize.literal("users.user_name = '" + req.auth.user.user_name + "'") : {})
+            checkProjectPermissions(req.params.id, req.auth.user)
+            .then( () => {
+                return Promise.all([
+                    models.project.findOne({
+                        where: {
+                            project_id: req.params.id
+                        },
+                        include: [
+                            { model: models.investigator
+                            , attributes: [ 'investigator_id', 'investigator_name' ]
+                            , through: { attributes: [] } // remove connector table from output
+                            },
+                            { model: models.domain
+                            , attributes: [ 'domain_id', 'domain_name' ]
+                            , through: { attributes: [] } // remove connector table from output
+                            },
+                            { model: models.publication
+                            , attributes: ['publication_id', 'title', 'author' ]
+                            },
+                            { model: models.sample
+                            , attributes: ['sample_id', 'sample_name', 'sample_type' ]
+                            },
+                            { model: models.project_group
+                            , attributes: [ 'project_group_id', 'group_name' ]
+                            },
+                            { model: models.user
+                            , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', PROJECT_PERMISSION_ATTR ]
+                            , through: { attributes: [] } // remove connector table from output
+                            }
                         ]
-                    },
-                    include: [
-                        { model: models.investigator
-                        , attributes: [ 'investigator_id', 'investigator_name' ]
-                        , through: { attributes: [] } // remove connector table from output
-                        },
-                        { model: models.domain
-                        , attributes: [ 'domain_id', 'domain_name' ]
-                        , through: { attributes: [] } // remove connector table from output
-                        },
-                        { model: models.publication
-                        , attributes: ['publication_id', 'title', 'author' ]
-                        },
-                        { model: models.sample
-                        , attributes: ['sample_id', 'sample_name', 'sample_type' ]
-                        },
-                        { model: models.project_group
-                        , attributes: [ 'project_group_id', 'group_name' ]
-                        },
-                        { model: models.user
-                        , attributes: [
-                            'user_id', 'user_name', 'first_name', 'last_name', ATTR_PERMISSION
-                        ]
-                        , through: { attributes: [] } // remove connector table from output
-                        }
-                    ]
-                }),
+                    }),
 
-                models.project.aggregate('project_type', 'DISTINCT', { plain: false }),
+                    models.project.aggregate('project_type', 'DISTINCT', { plain: false }),
 
-                models.domain.findAll({
-                    attributes: [ 'domain_id', 'domain_name' ]
-                }),
+                    models.domain.findAll({
+                        attributes: [ 'domain_id', 'domain_name' ]
+                    }),
 
-                models.project_group.findAll({
-                    attributes: [ 'project_group_id', 'group_name' ]
-                }),
+                    models.project_group.findAll({
+                        attributes: [ 'project_group_id', 'group_name' ]
+                    }),
 
-                models.assembly.count({
-                    where: { project_id: req.params.id },
-                }),
+                    models.assembly.count({
+                        where: { project_id: req.params.id },
+                    }),
 
-                models.combined_assembly.count({
-                    where: { project_id: req.params.id },
-                })
-            ])
+                    models.combined_assembly.count({
+                        where: { project_id: req.params.id },
+                    })
+                ])
+            })
             .then( results => {
                 var project = results[0];
                 if (!project)
@@ -438,7 +449,7 @@ module.exports = function(app) {
                     , attributes: ['publication_id', 'title']
                     },
                     { model: models.user
-                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', ATTR_PERMISSION]
+                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', PROJECT_PERMISSION_ATTR ]
                     , through: { attributes: [] } // remove connector table from output
                     },
                 ],
@@ -588,6 +599,27 @@ module.exports = function(app) {
         );
     });
 
+    app.delete('/projects/:project_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
+
+        // TODO check permissions on project
+
+        toJsonOrError(res, next,
+            models.publication.destroy({ // FIXME add on cascade delete
+                where: {
+                    project_id: req.params.project_id
+                }
+            })
+            .then(
+                models.project.destroy({
+                    where: {
+                        project_id: req.params.project_id
+                    }
+                })
+            )
+        );
+    });
+
     app.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
@@ -626,24 +658,51 @@ module.exports = function(app) {
         );
     });
 
-    app.delete('/projects/:project_id(\\d+)', function (req, res, next) {
+    app.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
         // TODO check permissions on project
 
         toJsonOrError(res, next,
-            models.publication.destroy({ // FIXME add on cascade delete
+            models.project_to_user.destroy({ // First remove all existing connections
                 where: {
-                    project_id: req.params.project_id
+                    project_id: req.params.project_id,
+                    user_id: req.params.user_id
                 }
             })
-            .then(
-                models.project.destroy({
-                    where: {
-                        project_id: req.params.project_id
-                    }
+            .then( () =>
+                models.project_to_user.create({
+                    project_id: req.params.project_id,
+                    user_id: req.params.user_id,
+                    permission: PERMISSION_CODES[req.body.permission]
+            })
+            )
+            .then( () =>
+                models.project.findOne({
+                    where: { project_id: req.params.project_id },
+                    include: [
+                        { model: models.user
+                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', PROJECT_PERMISSION_ATTR]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                    ]
                 })
             )
+        );
+    });
+
+    app.delete('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
+
+        // TODO check permissions on project
+
+        toJsonOrError(res, next,
+            models.project_to_user.destroy({
+                where: {
+                    project_id: req.params.project_id,
+                    user_id: req.params.user_id
+                }
+            })
         );
     });
 
@@ -737,14 +796,14 @@ module.exports = function(app) {
         .then( data => res.json(data) );
     });
 
-    app.get('/search_params', function (req, res, next) {
+    app.get('/samples/search_params', function (req, res, next) {
         mongo()
         .then((db)   => getSampleKeys(db))
         .then((data) => res.json(data))
         .catch((err) => res.status(500).send(err));
     });
 
-    app.post('/search_param_values', jsonParser, function (req, res, next) {
+    app.post('/samples/search_param_values', jsonParser, function (req, res, next) {
       var param = req.body.param;
       var query = req.body.query;
 
@@ -758,50 +817,53 @@ module.exports = function(app) {
 
     app.get('/samples/:id(\\d+)', function (req, res, next) {
         toJsonOrError(res, next,
-            Promise.all([
-                models.sample.findOne({
-                    where: { sample_id: req.params.id },
-                    include: [
-                        { model: models.project },
-                        { model: models.investigator
-                        , through: { attributes: [] } // remove connector table from output
-                        },
-                        { model: models.sample_file,
-                          include: [
-                            { model: models.sample_file_type }
-                          ]
-                        },
-                        { model: models.ontology
-                        , through: { attributes: [] } // remove connector table from output
-                        },
-                        { model: models.assembly },
-                        { model: models.combined_assembly },
-                        { model: models.sample_attr,
-                          include: [
-                              { model: models.sample_attr_type,
-                                include: [ models.sample_attr_type_alias ]
-                              }
-                          ]
-                        },
-                        { model: models.user
-                        , attributes: ['user_id', 'user_name']
-                        , through: { attributes: [] } // remove connector table from output
-                        }
-                    ]
-                }),
+            checkSamplePermissions(req.params.id, req.auth.user)
+            .then( () => {
+                return Promise.all([
+                    models.sample.findOne({
+                        where: { sample_id: req.params.id },
+                        include: [
+                            { model: models.project },
+                            { model: models.investigator
+                            , through: { attributes: [] } // remove connector table from output
+                            },
+                            { model: models.sample_file,
+                              include: [
+                                { model: models.sample_file_type }
+                              ]
+                            },
+                            { model: models.ontology
+                            , through: { attributes: [] } // remove connector table from output
+                            },
+                            { model: models.assembly },
+                            { model: models.combined_assembly },
+                            { model: models.sample_attr,
+                              include: [
+                                  { model: models.sample_attr_type,
+                                    include: [ models.sample_attr_type_alias ]
+                                  }
+                              ]
+                            },
+                            { model: models.user
+                            , attributes: ['user_id', 'user_name']
+                            , through: { attributes: [] } // remove connector table from output
+                            }
+                        ]
+                    }),
 
-                models.uproc_pfam_result.count({
-                    where: { sample_id: req.params.id },
-                }),
+                    models.uproc_pfam_result.count({
+                        where: { sample_id: req.params.id },
+                    }),
 
-                models.uproc_pfam_result.count({
-                    where: { sample_id: req.params.id },
-                }),
+                    models.uproc_pfam_result.count({
+                        where: { sample_id: req.params.id },
+                    }),
 
-                models.sample_to_centrifuge.count({
-                    where: { sample_id: req.params.id }
-                })
-            ])
+                    models.sample_to_centrifuge.count({
+                        where: { sample_id: req.params.id }
+                    })
+                ])
+            })
             .then( results => {
                 var sample = results[0];
                 sample.dataValues.protein_count = results[1] + results[2];
@@ -862,7 +924,13 @@ module.exports = function(app) {
                 ],
             include: [
                 { model: models.project
-                , attributes: [ 'project_id', 'project_name' ]
+                //, attributes: [ 'project_id', 'project_name' ]
+                , include: [
+                        { model: models.user
+                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
+                        , through: { attributes: [] } // remove connector table from output
+                        },
+                    ]
                 }
             ]
         };
@@ -900,6 +968,17 @@ module.exports = function(app) {
                 ]
             },
             { include: [ models.sample_to_user ]
+            })
+            .then( sample => {
+                return mongo()
+                .then( db =>
+                    db.collection('sample').insert({
+                        specimen__sample_id: sample.sample_id,
+                        specimen__sample_name: sample_name,
+                        specimen__project_id: project_id
+                    })
+                )
+                .then( () => { return sample });
             })
             .then( sample => {
                 return models.sample.findOne({
@@ -964,36 +1043,9 @@ module.exports = function(app) {
         errorOnNull(sample_id, attr_type, attr_value);
 
         toJsonOrError(res, next,
-            // Check permissions on parent project/sample
-            models.user.findOne({
-                where: { user_name: req.auth.profile.username },
-                include: [
-                    { model: models.sample
-                    , where: { sample_id: sample_id }
-                    },
-                    { model: models.project
-                    , include: [
-                        { model: models.sample
-                        , where: { sample_id: sample_id }
-                        }
-                      ]
-                    }
-                ]
-            })
-            .then( user => {
-                if (user.samples && user.samples.length > 0) {
-                    return user.samples[0];
-                }
-                else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
-                    return user.projects[0].samples[0];
-                }
-                else {
-                    console.log("Error: permission denied");
-                    res.status(403).send("Error: permission denied");
-                    return;
-                }
-            })
-            .then( sample =>
+            checkSamplePermissions(sample_id, req.auth.user)
+            // Create attribute type
+            .then( () =>
                 models.sample_attr_type.findOrCreate({
                     where: { type: attr_type }
                 })
@@ -1002,6 +1054,7 @@ module.exports = function(app) {
                     return sample_attr_type
                 })
             )
+            // Create attribute
             .then( sample_attr_type =>
                 models.sample_attr.findOrCreate({
                         where: {
@@ -1014,6 +1067,21 @@ module.exports = function(app) {
                         console.log("attr created: ", created);
                     })
             )
+            // Add to Mongo DB sample doc
+            .then( () =>
+                mongo()
+                .then( db => {
+                    var obj = {};
+                    obj["specimen__"+attr_type] = attr_value;
+
+                    db.collection('sample').updateOne(
+                        { "specimen__sample_id": 1*sample_id },
+                        { $set: obj }
+                    );
+
+                })
+            )
+            // Return sample with updated attributes
             .then( () =>
                 models.sample.findOne({
                     where: { sample_id: sample_id },
@@ -1044,55 +1112,41 @@ module.exports = function(app) {
         errorOnNull(sample_id, attr_id, attr_type, attr_value);
 
         toJsonOrError(res, next,
-            // Check permissions on parent project/sample
-            models.user.findOne({
-                where: { user_name: req.auth.profile.username },
-                include: [
-                    { model: models.sample
-                    , where: { sample_id: sample_id }
-                    },
-                    { model: models.project
-                    , include: [
-                        { model: models.sample
-                        , where: { sample_id: sample_id }
-                        }
-                      ]
-                    }
-                ]
-            })
-            .then( user => {
-                if (user.samples && user.samples.length > 0) {
-                    return user.samples[0];
-                }
-                else if (user.projects && user.projects.length > 0 && user.projects[0].samples && user.projects[0].samples.length > 0) {
-                    return user.projects[0].samples[0];
-                }
-                else {
-                    console.log("Error: permission denied");
-                    res.status(403).send("Error: permission denied");
-                    return;
-                }
-            })
-            .then( sample =>
+            checkSamplePermissions(sample_id, req.auth.user)
+            // Create attribute type
+            .then( () =>
                 models.sample_attr_type.findOrCreate({
                     where: { type: attr_type }
                 })
                 .spread( (sample_attr_type, created) => {
                     console.log("type created: ", created);
-                    return sample_attr_type
+                    return sample_attr_type;
                 })
             )
+            // Update attribute value
             .then( sample_attr_type =>
                 models.sample_attr.update(
                     { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
                       attr_value: attr_value
                     },
-                    { where: {
-                        sample_attr_id: attr_id
-                      }
-                    }
+                    { where: { sample_attr_id: attr_id } }
                 )
             )
+            // Add to Mongo DB sample doc
+            .then( () =>
+                mongo()
+                .then( db => {
+                    var obj = {};
+                    obj["specimen__"+attr_type] = attr_value;
+
+                    db.collection('sample').updateOne(
+                        { "specimen__sample_id": 1*sample_id },
+                        { $set: obj }
+                    );
+
+                })
+            )
+            // Return sample with updated attributes
             .then( () =>
                 models.sample.findOne({
                     where: { sample_id: sample_id },
@@ -1114,12 +1168,37 @@ module.exports = function(app) {
     app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        //TODO check permissions
-
         toJsonOrError(res, next,
-            models.sample_attr.destroy({
-                where: { sample_attr_id: req.params.attr_id }
-            })
+            checkSamplePermissions(req.params.sample_id, req.auth.user)
+            // Get attribute
+            .then( () =>
+                models.sample_attr.findOne({
+                    where: { sample_attr_id: req.params.attr_id },
+                    include: [
+                        models.sample_attr_type
+                    ]
+                })
+            )
+            // Remove from Mongo DB using type name
+            .then( sample_attr =>
+                mongo()
+                .then( db => {
+                    var obj = {};
+                    obj["specimen__"+sample_attr.sample_attr_type.type] = "";
+
+                    db.collection('sample').updateOne(
+                        { "specimen__sample_id": 1*req.params.sample_id },
+                        { $unset: obj }
+                    )
+                })
+            )
+            // Remove from MySQL DB using id
+            .then( () =>
+                models.sample_attr.destroy({
+                    where: { sample_attr_id: req.params.attr_id }
+                })
+            )
+            // Return sample with updated attributes
             .then( () => {
                 return models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
@@ -1232,9 +1311,43 @@ module.exports = function(app) {
     });
 
     app.post('/samples/search', jsonParser, function (req, res, next) {
+        console.log(req.body);
+
         mongo()
-        .then((db)   => getMetaSearchResults(db, req.body))
-        .then((data) => res.json(data))
+        .then( db => getMetaSearchResults(db, req.body) )
+        .then( data => {
+            // Add user permission info
+            var samplesById = {};
+            var sampleIds = data.map( s => {
+                samplesById[s.specimen__sample_id] = {};
+                samplesById[s.specimen__sample_id]["attributes"] = s;
+                return s.specimen__sample_id
+            });
+
+            return models.sample.findAll({
+                where: { sample_id: { $in: sampleIds } },
+                include: [
+                    { model: models.project
+                    //, attributes: [ 'project_id', 'project_name' ]
+                    , include: [
+                            { model: models.user
+                            , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
+                            , through: { attributes: [] } // remove connector table from output
+                            }
+                        ]
+                    }
+                ]
+            })
+            .then( samples => {
+                samples.forEach(s => {
+                    if (s.project.users)
+                        samplesById[s.sample_id].users = s.project.users;
+                });
+
+                return Object.values(samplesById);
+            });
+        })
+        .then( data => res.json(data) )
         .catch(next);
     });
 
@@ -1323,8 +1436,14 @@ module.exports = function(app) {
     app.get('/users', function(req, res, next) {
         requireAuth(req);
 
+//        toJsonOrError(res, next,
+//            models.user.findAll()
+//        );
+
         toJsonOrError(res, next,
-            models.user.findAll()
+            models.user.findAll({
+                where: { user_name: { $like: "%"+req.query.term+"%" } }
+            })
         );
     });
 
@@ -1432,6 +1551,42 @@ function toJsonOrError(res, next, promise) {
     .catch(next);
 }
 
+function checkProjectPermissions(projectId, user) {
+    console.log("user.user_name", user.user_name);
+    return models.project.findOne({
+        where: {
+            project_id: projectId,
+            $or: [ // check permissions -- DO NOT MODIFY
+                { private: { $or: [ 0, null ] } },
+                ( user ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {} )
+            ]
+        },
+        include: [
+            { model: models.user
+            , attributes: [ 'user_name' ]
+            , through: { attributes: [] } // remove connector table from output
+            }
+        ]
+    })
+    .then( project => {
+        if (!project)
+            throw(ERR_UNAUTHORIZED);
+    });
+}
+
+function checkSamplePermissions(sampleId, user) {
+    console.log("user.user_name", user.user_name);
+    return models.sample.findOne({
+        where: {
+            sample_id: sampleId,
+        }
+    })
+    .then( sample => {
+        console.log("sample.project_id=", sample.project_id);
+        return checkProjectPermissions(sample.project_id, user);
+    });
+}
+
 function errorOnNull() {
     if (arguments) {
         var notNull = Object.values(arguments).every( x => { return (typeof x !== "undefined") } );
@@ -1446,7 +1601,10 @@ function requireAuth(req) {
 }
 
 function agaveTokenValidator(req, res, next) {
-    req.auth = {};
+    req.auth = {
+        profile: {},
+        user: {}
+    };
 
     validateAgaveToken(req, false)
     .then( profile => {
@@ -1461,7 +1619,8 @@ function agaveTokenValidator(req, res, next) {
         return null;
     })
     .then( user => {
-        req.auth.user = user;
+        if (user)
+            req.auth.user = user;
     })
     .finally(next);
 }

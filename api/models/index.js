@@ -66,6 +66,7 @@ models.project_file.belongsTo(models.project_file_type, { foreignKey: 'project_f
 models.project.belongsToMany(models.user, { through: models.project_to_user, foreignKey: 'project_id' });
 models.user.belongsToMany(models.project, { through: models.project_to_user, foreignKey: 'user_id' });
 models.project.hasMany(models.project_to_user, { foreignKey: 'project_id' });
+//models.project_to_user.belongsTo(models.project, { foreignKey: 'project_id' });
 
 // publication <-> project_file
 models.publication.belongsToMany(models.project_file, { through: models.publication_to_project_file, foreignKey: 'publication_id' });
