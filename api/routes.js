@@ -47,6 +47,15 @@ const SAMPLE_PERMISSION_ATTR = // FIXME can this be resolved with above?
       'permission'
     ]
 
+function PROJECT_PERMISSION_CLAUSE(user) {
+    return {
+        $or: [
+            { private: { $or: [0, null] } },
+            (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {})
+        ]
+    };
+}
+
 const PERMISSION_CODES = {
     "owner": 1,
     "read-write": 2,
@@ -186,6 +195,7 @@ module.exports = function(app) {
     });
 
     app.get('/assemblies', function(req, res, next) {
+        //TODO currently private samples cannot have assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.assembly.findAll({
                 include: [
@@ -198,6 +208,7 @@ module.exports = function(app) {
     });
 
     app.get('/assemblies/:id(\\d+)', function(req, res, next) {
+        //TODO currently private samples cannot have assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.assembly.findOne({
                 where: { assembly_id: req.params.id },
@@ -211,6 +222,7 @@ module.exports = function(app) {
     });
 
     app.get('/combined_assemblies', function(req, res, next) {
+        //TODO currently private samples cannot have combined_assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.combined_assembly.findAll({
                 include: [
@@ -227,6 +239,7 @@ module.exports = function(app) {
     });
 
     app.get('/combined_assemblies/:id(\\d+)', function(req, res, next) {
+        //TODO currently private samples cannot have combined_assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.combined_assembly.findOne({
                 where: { combined_assembly_id: req.params.id },
@@ -436,6 +449,7 @@ module.exports = function(app) {
     app.get('/projects', function(req, res, next) {
         toJsonOrError(res, next,
             models.project.findAll({
+                where: PROJECT_PERMISSION_CLAUSE(req.auth.user),
                 include: [
                     { model: models.investigator
                     , attributes: ['investigator_id', 'investigator_name']
@@ -461,6 +475,7 @@ module.exports = function(app) {
     });
 
     app.get('/projects/:id(\\d+)/assemblies', function (req, res, next) {
+        //TODO currently private samples cannot have assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.assembly.findAll({
                 where: { project_id: req.params.id },
@@ -470,6 +485,7 @@ module.exports = function(app) {
     });
 
     app.get('/projects/:id(\\d+)/combined_assemblies', function (req, res, next) {
+        //TODO currently private samples cannot have combined_assemblies, but in the future will need to check permissions on parent project
         toJsonOrError(res, next,
             models.combined_assembly.findAll({
                 where: { project_id: req.params.id },
@@ -515,8 +531,6 @@ module.exports = function(app) {
     app.post('/projects/:project_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         var project_id = req.params.project_id;
         var project_name = req.body.project_name;
         var project_code = req.body.project_code;
@@ -527,13 +541,16 @@ module.exports = function(app) {
         var groups = req.body.groups;
 
         toJsonOrError(res, next,
-            models.project.update(
-                { project_name: project_name,
-                  project_code: project_code,
-                  project_type: project_type,
-                  url: project_url
-                },
-                { where: { project_id: project_id } }
+            checkProjectPermissions(project_id, req.auth.user)
+            .then( () =>
+                models.project.update(
+                    { project_name: project_name,
+                      project_code: project_code,
+                      project_type: project_type,
+                      url: project_url
+                    },
+                    { where: { project_id: project_id } }
+                )
             )
             .then( () => // remove all domains from project
                 models.project_to_domain.destroy({
@@ -602,15 +619,16 @@ module.exports = function(app) {
     app.delete('/projects/:project_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         toJsonOrError(res, next,
-            models.publication.destroy({ // FIXME add on cascade delete
-                where: {
-                    project_id: req.params.project_id
-                }
-            })
-            .then(
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.publication.destroy({ // FIXME add on cascade delete
+                    where: {
+                        project_id: req.params.project_id
+                    }
+                })
+            )
+            .then( () =>
                 models.project.destroy({
                     where: {
                         project_id: req.params.project_id
@@ -623,15 +641,16 @@ module.exports = function(app) {
     app.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         toJsonOrError(res, next,
-            models.project_to_investigator.findOrCreate({
-                where: {
-                    project_id: req.params.project_id,
-                    investigator_id: req.params.investigator_id
-                }
-            })
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_investigator.findOrCreate({
+                    where: {
+                        project_id: req.params.project_id,
+                        investigator_id: req.params.investigator_id
+                    }
+                })
+            )
             .then( () =>
                 models.project.findOne({
                     where: { project_id: req.params.project_id },
@@ -646,30 +665,32 @@ module.exports = function(app) {
     app.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         toJsonOrError(res, next,
-            models.project_to_investigator.destroy({
-                where: {
-                    project_id: req.params.project_id,
-                    investigator_id: req.params.investigator_id
-                }
-            })
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_investigator.destroy({
+                    where: {
+                        project_id: req.params.project_id,
+                        investigator_id: req.params.investigator_id
+                    }
+                })
+            )
         );
     });
 
     app.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         toJsonOrError(res, next,
-            models.project_to_user.destroy({ // First remove all existing connections
-                where: {
-                    project_id: req.params.project_id,
-                    user_id: req.params.user_id
-                }
-            })
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_user.destroy({ // First remove all existing connections
+                    where: {
+                        project_id: req.params.project_id,
+                        user_id: req.params.user_id
+                    }
+                })
+            )
             .then( () =>
                 models.project_to_user.create({
                     project_id: req.params.project_id,
@@ -694,15 +715,16 @@ module.exports = function(app) {
     app.delete('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on project
-
         toJsonOrError(res, next,
-            models.project_to_user.destroy({
-                where: {
-                    project_id: req.params.project_id,
-                    user_id: req.params.user_id
-                }
-            })
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_user.destroy({
+                    where: {
+                        project_id: req.params.project_id,
+                        user_id: req.params.user_id
+                    }
+                })
+            )
         );
     });
 
@@ -744,50 +766,64 @@ module.exports = function(app) {
     app.put('/publications', function(req, res, next) {
         requireAuth(req);
 
-        toJsonOrError(res, next,
-            models.publication.create({
-                project_id: req.body.project_id,
-                title: req.body.title,
-                author: req.body.authors,
-                pub_date: req.body.date,
-                pubmed_id: req.body.pubmed_id,
-                doi: req.body.doi
-            })
-        );
-    });
-
-    app.post('/publications/:id(\\d+)', function (req, res, next) {
-        requireAuth(req);
-
-        // TODO check permissions
+        var projectId = req.body.project_id;
+        errorOnNull(projectId);
 
         toJsonOrError(res, next,
-            models.publication.update(
-                { title: req.body.title,
-                  author: req.body.authors,
-                  pub_date: req.body.date,
-                  pubmed_id: req.body.pubmed_id,
-                  doi: req.body.doi
-                },
-                { where: { publication_id: req.params.iid } }
-            )
-            .then( result =>
-                models.publication.findOne({
-                    where: { publication_id: req.params.id }
+            checkProjectPermissions(projectId, req.auth.user)
+            .then( () =>
+                models.publication.create({
+                    project_id: projectId,
+                    title: req.body.title,
+                    author: req.body.authors,
+                    pub_date: req.body.date,
+                    pubmed_id: req.body.pubmed_id,
+                    doi: req.body.doi
                 })
             )
         );
     });
 
-    app.delete('/publications/:id(\\d+)', function (req, res, next) {
+    app.post('/publications/:publication_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        //TODO check permissions
+        toJsonOrError(res, next,
+            models.publication.findOne({ where: { publication_id: req.params.publication_id } })
+            .then( publication =>
+                checkProjectPermissions(publication.project_id, req.auth.user)
+            )
+            .then( () =>
+                models.publication.update(
+                    { title: req.body.title,
+                      author: req.body.authors,
+                      pub_date: req.body.date,
+                      pubmed_id: req.body.pubmed_id,
+                      doi: req.body.doi
+                    },
+                    { where: { publication_id: req.params.publication_id } }
+                )
+            )
+            .then( result =>
+                models.publication.findOne({
+                    where: { publication_id: req.params.publication_id }
+                })
+            )
+        );
+    });
+
+    app.delete('/publications/:publication_id(\\d+)', function (req, res, next) {
+        requireAuth(req);
 
         toJsonOrError(res, next,
-            models.publication.destroy({
-                where: { publication_id: req.params.id }
-            })
+            models.publication.findOne({ where: { publication_id: req.params.publication_id } })
+            .then( publication =>
+                checkProjectPermissions(publication.project_id, req.auth.user)
+            )
+            .then( () =>
+                models.publication.destroy({
+                    where: { publication_id: req.params.publication_id }
+                })
+            )
         );
     });
 
@@ -823,7 +859,14 @@ module.exports = function(app) {
                     models.sample.findOne({
                         where: { sample_id: req.params.id },
                         include: [
-                            { model: models.project },
+                            { model: models.project
+                            , include: [
+                                    { model: models.user
+                                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
+                                    , through: { attributes: [] } // remove connector table from output
+                                    },
+                                ]
+                            },
                             { model: models.investigator
                             , through: { attributes: [] } // remove connector table from output
                             },
@@ -843,10 +886,6 @@ module.exports = function(app) {
                                     include: [ models.sample_attr_type_alias ]
                                   }
                               ]
-                            },
-                            { model: models.user
-                            , attributes: ['user_id', 'user_name']
-                            , through: { attributes: [] } // remove connector table from output
                             }
                         ]
                     }),
@@ -874,6 +913,7 @@ module.exports = function(app) {
     });
 
     app.get('/samples/:id(\\d+)/proteins', function (req, res, next) {
+        // TODO private samples currently do not have associated protein results, however in the future need to check pemissions
         toJsonOrError(res, next,
             Promise.all([
                 models.uproc_pfam_result.findAll({
@@ -902,12 +942,13 @@ module.exports = function(app) {
     });
 
     app.get('/samples/:id(\\d+)/centrifuge_results', function (req, res, next) {
+        // TODO private samples currently do not have associated centrifuge results, however in the future need to check pemissions
         toJsonOrError(res, next,
             models.sample_to_centrifuge.findAll({
                 where: { sample_id: req.params.id },
                 attributes: [ 'sample_to_centrifuge_id', 'num_reads', 'num_unique_reads', 'abundance' ],
                 include: [{
-                    model: models.centrifuge,
+                    model: models.centrifuge
                 }]
             })
         );
@@ -924,12 +965,13 @@ module.exports = function(app) {
                 ],
             include: [
                 { model: models.project
-                //, attributes: [ 'project_id', 'project_name' ]
+                , attributes: [ 'project_id', 'project_name', 'private' ]
+                //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see filter step below
                 , include: [
                         { model: models.user
                         , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
                         , through: { attributes: [] } // remove connector table from output
-                        },
+                        }
                     ]
                 }
             ]
@@ -942,13 +984,16 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             models.sample.findAll(params)
+            .then(samples => { // filter by permission -- workaround for broken clause above
+                return samples.filter(sample => {
+                    return !sample.project.private || (req.auth.user && req.auth.user.user_name && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name));
+                })
+            })
         );
     });
 
     app.put('/samples', function(req, res, next) {
         requireAuth(req);
-
-        //TODO check permissions on parent project
 
         var sample_name = req.body.sample_name;
         var project_id = req.body.project_id;
@@ -956,19 +1001,14 @@ module.exports = function(app) {
         errorOnNull(sample_name, project_id);
 
         toJsonOrError(res, next,
-            models.sample.create({
-                sample_name: sample_name,
-                sample_code: "__"+sample_name,
-                project_id: project_id,
-                private: 1,
-                sample_to_users: [
-                    { user_id : req.auth.user.user_id
-                    , permission: 1
-                    }
-                ]
-            },
-            { include: [ models.sample_to_user ]
-            })
+            checkProjectPermissions(project_id, req.auth.user)
+            .then( () =>
+                models.sample.create({
+                    sample_name: sample_name,
+                    sample_code: "__"+sample_name,
+                    project_id: project_id
+                })
+            )
             .then( sample => {
                 return mongo()
                 .then( db =>
@@ -986,27 +1026,28 @@ module.exports = function(app) {
                     include: [
                         { model: models.project }
                     ]
-                })
+                });
             })
         );
     });
 
-    app.post('/samples/:id(\\d+)', function (req, res, next) {
+    app.post('/samples/:sample_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        // TODO check permissions on sample
-
         toJsonOrError(res, next,
-            models.sample.update(
-                { sample_name: req.body.sample_name,
-                  sample_acc: req.body.sample_code,
-                  sample_type: req.body.sample_type
-                },
-                { where: { sample_id: req.params.id } }
+            checkSamplePermissions(req.params.sample_id, req.auth.user)
+            .then( () =>
+                models.sample.update(
+                    { sample_name: req.body.sample_name,
+                      sample_acc: req.body.sample_code,
+                      sample_type: req.body.sample_type
+                    },
+                    { where: { sample_id: req.params.sample_id } }
+                )
             )
             .then( result =>
                 models.sample.findOne({
-                    where: { sample_id: req.params.id },
+                    where: { sample_id: req.params.sample_id },
                     include: [
                         { model: models.project },
                     ]
@@ -1018,18 +1059,20 @@ module.exports = function(app) {
     app.delete('/samples/:sample_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        //TODO check permissions
-
-        models.sample_file.destroy({
-            where: { sample_id: req.params.sample_id }
-        })
-        .then(
-            models.sample.destroy({
-                where: { sample_id: req.params.sample_id }
-            })
-        )
-        .then( res.send("1") )
-        .catch(next);
+        toJsonOrError(res, next,
+            checkSamplePermissions(req.params.sample_id, req.auth.user)
+            .then( () =>
+                models.sample_file.destroy({
+                    where: { sample_id: req.params.sample_id }
+                })
+            )
+            .then( () =>
+                models.sample.destroy({
+                    where: { sample_id: req.params.sample_id }
+                })
+            )
+            .then( res.send("1") )
+        );
     });
 
     app.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
@@ -1239,6 +1282,8 @@ module.exports = function(app) {
             params.where = { sample_id: { in: ids } };
         }
 
+        //TODO check permissions
+
         toJsonOrError(res, next,
             models.sample_file.findAll(params)
         );
@@ -1254,15 +1299,18 @@ module.exports = function(app) {
         errorOnNull(files);
 
         toJsonOrError(res, next,
-            Promise.all(
-                files.map( file =>
-                    models.sample_file.findOrCreate({
-                        where: {
-                            sample_id: req.params.sample_id,
-                            sample_file_type_id: 1,
-                            file
-                        }
-                    })
+            checkSamplePermissions(req.params.sample_id, req.auth.user)
+            .then( () =>
+                Promise.all(
+                    files.map( file =>
+                        models.sample_file.findOrCreate({
+                            where: {
+                                sample_id: req.params.sample_id,
+                                sample_file_type_id: 1,
+                                file
+                            }
+                        })
+                    )
                 )
             )
             .then( () => {
@@ -1286,12 +1334,13 @@ module.exports = function(app) {
     app.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
-        //TODO check permissions
-
         toJsonOrError(res, next,
-            models.sample_file.destroy({
-                where: { sample_file_id: req.params.file_id }
-            })
+            checkSamplePermissions(req.params.sample_id, req.auth.user)
+            .then( () =>
+                models.sample_file.destroy({
+                    where: { sample_file_id: req.params.file_id }
+                })
+            )
             .then( () => {
                 return models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
@@ -1352,6 +1401,7 @@ module.exports = function(app) {
     });
 
     app.get('/samples/taxonomy_search/:query', function (req, res, next) {
+        //TODO currently private samples do not have associated centrifuge results, but in the future will need to check permissions here
         toJsonOrError(res, next,
             models.centrifuge.findAll({
                 where: sequelize.or(
@@ -1375,6 +1425,8 @@ module.exports = function(app) {
     app.get('/samples/protein_search/:db/:query', function (req, res, next) {
         var db = req.params.db.toUpperCase();
         var query = req.params.query.toUpperCase();
+
+        //TODO current private samples do not have associated protein results, but in the future will need to check permissions here
 
         if (db == "PFAM") {
             toJsonOrError(res, next,
@@ -1436,10 +1488,6 @@ module.exports = function(app) {
     app.get('/users', function(req, res, next) {
         requireAuth(req);
 
-//        toJsonOrError(res, next,
-//            models.user.findAll()
-//        );
-
         toJsonOrError(res, next,
             models.user.findAll({
                 where: { user_name: { $like: "%"+req.query.term+"%" } }
@@ -1460,13 +1508,12 @@ module.exports = function(app) {
                         { model: models.investigator,
                           through: { attributes: [] } // remove connector table from output
                         },
-                        { model: models.publication }
-                      ]
-                    },
-                    { model: models.sample,
-                      through: { attributes: [] }, // remove connector table from output
-                      include: [
-                        { model: models.sample_file }
+                        { model: models.publication },
+                        { model: models.sample,
+                          include: [
+                            { model: models.sample_file }
+                          ]
+                        }
                       ]
                     }
                 ]
@@ -1487,16 +1534,16 @@ module.exports = function(app) {
     app.post('/users/login', function(req, res, next) {
         requireAuth(req);
 
-        var user_name = req.body.user_name; // FIXME get username from token
-        errorOnNull(user_name);
+        var username = req.auth.user.user_name;
+        errorOnNull(username);
 
         models.user.findOrCreate({
-            where: { user_name: user_name }
+            where: { user_name: username }
         })
         .spread( (user, created) => {
             models.login.create({
                 user_id: user.user_id,
-                login_date: sequelize.fn('NOW'),
+                login_date: sequelize.fn('NOW')
             })
             .then( login =>
                 res.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
@@ -1517,7 +1564,7 @@ module.exports = function(app) {
 
     app.use(errorHandler);
 
-    // catch-all function
+    // Catch-all function
     app.get('*', function(req, res, next){
         res.status(404).send("Unknown route: " + req.path);
     });
@@ -1553,14 +1600,12 @@ function toJsonOrError(res, next, promise) {
 
 function checkProjectPermissions(projectId, user) {
     console.log("user.user_name", user.user_name);
+
+    var conditions = PROJECT_PERMISSION_CLAUSE(user);
+    conditions.project_id = projectId;
+
     return models.project.findOne({
-        where: {
-            project_id: projectId,
-            $or: [ // check permissions -- DO NOT MODIFY
-                { private: { $or: [ 0, null ] } },
-                ( user ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {} )
-            ]
-        },
+        where: conditions,
         include: [
             { model: models.user
             , attributes: [ 'user_name' ]
