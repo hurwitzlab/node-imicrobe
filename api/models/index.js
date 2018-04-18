@@ -125,11 +125,6 @@ models.sample.belongsToMany(models.centrifuge, { through: models.sample_to_centr
 models.centrifuge.belongsToMany(models.sample, { through: models.sample_to_centrifuge, foreignKey: 'centrifuge_id' });
 models.sample_to_centrifuge.belongsTo(models.centrifuge, { foreignKey: 'centrifuge_id' });
 
-// sample <-> user
-models.sample.belongsToMany(models.user, { through: models.sample_to_user, foreignKey: 'sample_id' });
-models.user.belongsToMany(models.sample, { through: models.sample_to_user, foreignKey: 'user_id' });
-models.sample.hasMany(models.sample_to_user, { foreignKey: 'sample_id' });
-
 // app <-> app_run
 models.app.hasMany(models.app_run, { foreignKey: 'app_id' });
 models.app_run.belongsTo(models.app, { foreignKey: 'app_id' });
