@@ -401,6 +401,10 @@ module.exports = function(app) {
                             },
                             { model: models.sample
                             , attributes: ['sample_id', 'sample_name', 'sample_type' ]
+                            , include: [
+                                { model: models.sample_file
+                                }
+                              ]
                             },
                             { model: models.project_group
                             , attributes: [ 'project_group_id', 'group_name' ]
@@ -890,6 +894,8 @@ module.exports = function(app) {
                         ]
                     }),
 
+                    models.sample.aggregate('sample_type', 'DISTINCT', { plain: false }),
+
                     models.uproc_pfam_result.count({
                         where: { sample_id: req.params.id },
                     }),
@@ -905,8 +911,9 @@ module.exports = function(app) {
             })
             .then( results => {
                 var sample = results[0];
-                sample.dataValues.protein_count = results[1] + results[2];
-                sample.dataValues.centrifuge_count = results[3];
+                sample.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
+                sample.dataValues.protein_count = results[2] + results[3];
+                sample.dataValues.centrifuge_count = results[4];
                 return sample;
             })
         );
@@ -1114,14 +1121,62 @@ module.exports = function(app) {
             .then( () =>
                 mongo()
                 .then( db => {
+                    var key = "specimen__" + attr_type;
                     var obj = {};
-                    obj["specimen__"+attr_type] = attr_value;
+                    obj[key] = attr_value;
 
                     db.collection('sample').updateOne(
                         { "specimen__sample_id": 1*sample_id },
                         { $set: obj }
                     );
 
+                    db.collection('sampleKeys').findOne(
+                        { "_id": { "key": key } },
+                        (err, item) => {
+                            if (item) {
+                                db.collection('sampleKeys').updateOne(
+                                    {
+                                        "_id" : {
+                                            "key" : key
+                                        },
+                                    },
+                                    {
+                                        "value" : {
+                                            "types" : {
+                                                "Number" : ( isNaN(attr_value) ? item.value.types.Number : item.value.types.Number + 1 ),
+                                                "String" : ( isNaN(attr_value) ? item.value.types.String + 1 : item.value.types.String )
+                                            }
+                                        },
+                                        "totalOccurrences" : item.totalOccurrences + 1,
+                                        "percentContaining" : 100 // FIXME this is wrong
+                                    },
+                                    (err, item) => {
+                                        // TODO error handling
+                                    }
+                                );
+                            }
+                            else {
+                                db.collection('sampleKeys').insert(
+                                    {
+                                        "_id" : {
+                                            "key" : key
+                                        },
+                                        "value" : {
+                                            "types" : {
+                                                "Number" : ( isNaN(attr_value) ? 0 : 1 ),
+                                                "String" : ( isNaN(attr_value) ? 1 : 0 )
+                                            }
+                                        },
+                                        "totalOccurrences" : 1,
+                                        "percentContaining" : 100 // FIXME this is wrong
+                                    },
+                                    (err, item) => {
+                                        // TODO error handling
+                                    }
+                                );
+                            }
+                        }
+                    );
                 })
             )
             // Return sample with updated attributes
@@ -1490,7 +1545,13 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             models.user.findAll({
-                where: { user_name: { $like: "%"+req.query.term+"%" } }
+                where: {
+                    $or: {
+                        user_name: { $like: "%"+req.query.term+"%" },
+                        first_name: { $like: "%"+req.query.term+"%" },
+                        last_name: { $like: "%"+req.query.term+"%" }
+                    }
+                }
             })
         );
     });
@@ -1511,7 +1572,9 @@ module.exports = function(app) {
                         { model: models.publication },
                         { model: models.sample,
                           include: [
-                            { model: models.sample_file }
+                            { model: models.sample_file },
+                            { model: models.project
+                            }
                           ]
                         }
                       ]
