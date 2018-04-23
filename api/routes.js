@@ -1662,7 +1662,7 @@ function toJsonOrError(res, next, promise) {
 }
 
 function checkProjectPermissions(projectId, user) {
-    console.log("user.user_name", user.user_name);
+    //console.log("user.user_name", user.user_name);
 
     var conditions = PROJECT_PERMISSION_CLAUSE(user);
     conditions.project_id = projectId;
@@ -1683,14 +1683,17 @@ function checkProjectPermissions(projectId, user) {
 }
 
 function checkSamplePermissions(sampleId, user) {
-    console.log("user.user_name", user.user_name);
+    //console.log("user.user_name", user.user_name);
     return models.sample.findOne({
         where: {
             sample_id: sampleId,
         }
     })
     .then( sample => {
-        console.log("sample.project_id=", sample.project_id);
+        if (!sample)
+            throw(ERR_NOT_FOUND);
+
+        //console.log("sample.project_id=", sample.project_id);
         return checkProjectPermissions(sample.project_id, user);
     });
 }
