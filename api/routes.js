@@ -42,7 +42,7 @@ const PROJECT_PERMISSION_ATTR = // Convert "permission" field to a string
 const SAMPLE_PERMISSION_ATTR = // FIXME can this be resolved with above?
     [ sequelize.literal(
         '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
-            'FROM project_to_user WHERE project_to_user.user_id = `project->users`.`user_id`)'
+            'FROM project_to_user WHERE project_to_user.user_id = `project->users`.`user_id` AND project_to_user.project_id = project.project_id)'
       ),
       'permission'
     ]
