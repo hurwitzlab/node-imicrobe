@@ -34,7 +34,7 @@ const ERR_NOT_FOUND = new MyError("Not found", 404);
 const PROJECT_PERMISSION_ATTR = // Convert "permission" field to a string
     [ sequelize.literal(
         '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
-            'FROM project_to_user WHERE project_to_user.user_id = users.user_id)'
+            'FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
       ),
       'permission'
     ]
