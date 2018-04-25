@@ -1092,6 +1092,8 @@ module.exports = function(app) {
 
         errorOnNull(sample_id, attr_type, attr_value);
 
+        var aliases = (attr_aliases ? attr_aliases.split(",").map(s => s.trim()) : []);
+
         toJsonOrError(res, next,
             checkSamplePermissions(sample_id, req.auth.user)
             // Create attribute type
@@ -1100,24 +1102,32 @@ module.exports = function(app) {
                     where: { type: attr_type }
                 })
                 .spread( (sample_attr_type, created) => {
-                    console.log("type created: ", created);
-                    return sample_attr_type
+                    return sample_attr_type;
                 })
             )
-            // Create attribute
+            // Create attribute and type aliases
             .then( sample_attr_type =>
-                models.sample_attr.findOrCreate({
-                        where: {
-                            sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                            sample_id: sample_id,
-                            attr_value: attr_value
-                        }
-                    })
-                    .spread( (sample_attr, created) => {
-                        console.log("attr created: ", created);
-                    })
+                Promise.all(
+                    aliases.map(alias =>
+                        models.sample_attr_type_alias.findOrCreate({
+                            where: {
+                                sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                                alias: alias
+                            }
+                        })
+                    )
+                    .push(
+                        models.sample_attr.findOrCreate({
+                            where: {
+                                sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                                sample_id: sample_id,
+                                attr_value: attr_value
+                            }
+                        })
+                    )
+                )
             )
-            // Add to Mongo DB sample doc
+            // Add attribute to Mongo DB
             .then( () =>
                 mongo()
                 .then( db => {
@@ -1209,16 +1219,15 @@ module.exports = function(app) {
 
         errorOnNull(sample_id, attr_id, attr_type, attr_value);
 
+        var aliases = (attr_aliases ? attr_aliases.split(",").map(s => s.trim()) : []);
+
         toJsonOrError(res, next,
             checkSamplePermissions(sample_id, req.auth.user)
-            // Create attribute type
+            // Get attribute type
             .then( () =>
-                models.sample_attr_type.findOrCreate({
-                    where: { type: attr_type }
-                })
-                .spread( (sample_attr_type, created) => {
-                    console.log("type created: ", created);
-                    return sample_attr_type;
+                models.sample_attr_type.findOne({
+                    where: { type: attr_type },
+                    include: [ models.sample_attr_type_alias ]
                 })
             )
             // Update attribute value
@@ -1229,6 +1238,33 @@ module.exports = function(app) {
                     },
                     { where: { sample_attr_id: attr_id } }
                 )
+                .then( () => {
+                    var currentAliases = sample_attr_type.sample_attr_type_aliases;
+                    var aliasesToAdd = aliases.filter(function(s) { return currentAliases.indexOf(s) < 0; });
+                    var aliasesToDelete = currentAliases.filter(function(a) { return aliases.indexOf(a.alias) < 0; });
+                    console.log("delete:", aliasesToDelete)
+
+                    return Promise.all(
+                        aliasesToAdd.map(alias =>
+                            models.sample_attr_type_alias.findOrCreate({
+                                where: {
+                                    sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                                    alias: alias
+                                }
+                            })
+                        )
+                        .concat(
+                            aliasesToDelete.map(alias =>
+                                models.sample_attr_type_alias.destroy({
+                                    where: {
+                                        sample_attr_type_id: sample_attr_type.sample_attr_type_id,
+                                        alias: alias.alias
+                                    }
+                                })
+                            )
+                        )
+                    )
+                })
             )
             // Add to Mongo DB sample doc
             .then( () =>
@@ -1265,6 +1301,8 @@ module.exports = function(app) {
 
     app.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (req, res, next) {
         requireAuth(req);
+
+        //TODO delete unused sample_attr_type_alias entries
 
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
