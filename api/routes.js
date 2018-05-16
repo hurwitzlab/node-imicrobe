@@ -62,6 +62,10 @@ const PERMISSION_CODES = {
     "read-only": 3
 }
 
+function getKeyByValue(object, value) {
+    return Object.keys(object).find(key => object[key] === value);
+}
+
 
 //TODO split up into modules
 module.exports = function(app) {
@@ -354,9 +358,14 @@ module.exports = function(app) {
     app.get('/project_groups', function(req, res, next) {
         toJsonOrError(res, next,
             models.project_group.findAll({
+                where: (req.query.term ? { group_name: { $like: "%"+req.query.term+"%" } } : {}),
                 include: [
                     { model: models.project
                     , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.user
+                    , attributes: [ 'user_id', 'user_name' ]
                     , through: { attributes: [] } // remove connector table from output
                     }
                 ]
@@ -374,6 +383,23 @@ module.exports = function(app) {
                     , through: { attributes: [] } // remove connector table from output
                     }
                 ]
+            })
+        );
+    });
+
+    app.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
+        requireAuth(req);
+
+        toJsonOrError(res, next,
+            checkProjectPermissions(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_project_group.create({
+                    project_group_id: req.params.project_group_id,
+                    project_id: req.params.project_id,
+                })
+            )
+            .then( () => {
+                return "success";
             })
         );
     });
@@ -407,7 +433,10 @@ module.exports = function(app) {
                               ]
                             },
                             { model: models.project_group
-                            , attributes: [ 'project_group_id', 'group_name' ]
+                            , attributes: [ 'project_group_id', 'group_name',
+                                [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user WHERE project_group_to_user.project_group_id = project_group_id)'), 'user_count' ]
+                              ]
+                            , through: { attributes: [] } // remove connector table from output
                             },
                             { model: models.user
                             , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', PROJECT_PERMISSION_ATTR ]
@@ -590,23 +619,6 @@ module.exports = function(app) {
                     )
                 )
             )
-//            .then( () => // remove all groups from project
-//                models.project_to_project_group.destroy({
-//                    where: { project_id: project_id }
-//                })
-//            )
-//            .then( () =>
-//                Promise.all(
-//                    groups.map( g =>
-//                        models.project_to_project_group.findOrCreate({
-//                            where: {
-//                                project_id: project_id,
-//                                project_group_id: g.project_group_id
-//                            }
-//                        })
-//                    )
-//                )
-//            )
             .then( () =>
                 models.project.findOne({
                     where: { project_id: project_id },
@@ -700,8 +712,9 @@ module.exports = function(app) {
                     project_id: req.params.project_id,
                     user_id: req.params.user_id,
                     permission: PERMISSION_CODES[req.body.permission]
-            })
+                })
             )
+            .then( updateProjectFilePermissions(req) )
             .then( () =>
                 models.project.findOne({
                     where: { project_id: req.params.project_id },
@@ -716,6 +729,121 @@ module.exports = function(app) {
         );
     });
 
+    // Move into own module
+    function updateProjectFilePermissions(req, files) {
+        var project_id = req.params.project_id;
+        var user_id = req.params.user_id;
+        var token = req.headers.authorization;
+        var agavePermission = toAgavePermission(req.body.permission);
+
+        return models.project.findOne({
+            where: { project_id: project_id },
+            include: [
+                { model: models.sample,
+                  include: [ models.sample_file ]
+                }
+            ]
+        })
+        .then( project => {
+            return models.user.findOne({
+                where: { user_id: user_id }
+            })
+            .then( user => {
+                return {
+                    user: user,
+                    samples: project.samples
+                }
+            })
+        })
+        .then( result => {
+            var username = result.user.user_name;
+
+            if (!files) { // use all project's sample files if none given
+                files = result.samples.reduce((acc, s) => acc.concat(s.sample_files), []);
+                files = files.map(f => f.file);
+            }
+
+            return agaveUpdateFilePermissions(username, token, agavePermission, files);
+        });
+    }
+
+    function updateSampleFilePermissions(req, files) {
+        var sample_id = req.params.sample_id;
+        var token = req.headers.authorization;
+
+        return models.sample.findOne({
+            where: { sample_id: sample_id },
+            include: [
+                { model: models.project
+                , include: [
+                        { model: models.user
+                        , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name' ]
+                        , through: { attributes: [ 'permission' ] }
+                        },
+                    ]
+                },
+                { model: models.sample_file
+                }
+            ]
+        })
+        .then( sample => {
+            if (!files) // use all sample files if none given
+                files = sample.sample_files.map(f => f.file);
+
+            return Promise.all(
+                sample.project.users.map(u => {
+                    var agavePermission = toAgavePermission(getKeyByValue(PERMISSION_CODES, u.project_to_user.permission));
+                    console.log("!!!!!!", u.user_name, agavePermission);
+                    return agaveUpdateFilePermissions(u.user_name, token, agavePermission, files);
+                })
+            );
+        });
+    }
+
+    function agaveUpdateFilePermissions(username, token, permission, files) {
+        return Promise.all(
+            files.map(f => {
+                var url = config.agaveBaseUrl + "/files/v2/pems/system/data.iplantcollaborative.org" + f;
+                var options = {
+                    method: "POST",
+                    uri: url,
+                    headers: {
+                        Accept: "application/json" ,
+                        Authorization: token
+                    },
+                    form: {
+                        username: username,
+                        permission: permission,
+                        recursive: false
+                    },
+                    json: true
+                };
+
+                console.log("Sending POST", url, username, permission);
+                return requestp(options);
+//                   .then(function (parsedBody) {
+//                     console.log(parsedBody);
+//                   });
+//                 .catch(function (err) {
+//                     console.error(err.message);
+//                  res.status(500).send("Agave permissions request failed");
+//              });
+            })
+        );
+    }
+
+    function toAgavePermission(perm) {
+        if (perm) {
+            switch (perm.toLowerCase()) {
+                case "owner": return "ALL";
+                case "read-only": return "READ";
+                case "read-write": return "READ_WRITE";
+            }
+        }
+
+        return "NONE";
+    }
+
     app.delete('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
         requireAuth(req);
 
@@ -729,6 +857,7 @@ module.exports = function(app) {
                     }
                 })
             )
+            .then( updateProjectFilePermissions(req) )
         );
     });
 
@@ -1385,9 +1514,8 @@ module.exports = function(app) {
     app.put('/samples/:sample_id/files', function(req, res, next) {
         requireAuth(req);
 
-        //TODO check permissions
-
         var files = req.body.files;
+        console.log("files: ", files);
 
         errorOnNull(files);
 
@@ -1400,14 +1528,15 @@ module.exports = function(app) {
                             where: {
                                 sample_id: req.params.sample_id,
                                 sample_file_type_id: 1,
-                                file
+                                file: file
                             }
                         })
                     )
                 )
             )
-            .then( () => {
-                return models.sample.findOne({
+            .then( updateSampleFilePermissions(req, files) )
+            .then( () =>
+                models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
                     include: [
                         { model: models.project },
@@ -1420,7 +1549,7 @@ module.exports = function(app) {
                         }
                     ]
                 })
-            })
+            )
         );
     });
 
