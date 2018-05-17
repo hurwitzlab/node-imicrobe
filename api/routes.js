@@ -26,6 +26,7 @@ class MyError extends Error {
 
 const ERR_BAD_REQUEST = new MyError("Bad request", 400);
 const ERR_UNAUTHORIZED = new MyError("Unauthorized", 401);
+const ERR_PERMISSION_DENIED = new MyError("Permission denied", 403);
 const ERR_NOT_FOUND = new MyError("Not found", 404);
 
 
@@ -33,16 +34,32 @@ const ERR_NOT_FOUND = new MyError("Not found", 404);
 
 const PROJECT_PERMISSION_ATTR = // Convert "permission" field to a string
     [ sequelize.literal(
-        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
             'FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
       ),
       'permission'
     ]
 
-const SAMPLE_PERMISSION_ATTR = // FIXME can this be resolved with above?
+const SAMPLE_PERMISSION_ATTR = // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
     [ sequelize.literal(
-        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" END ' +
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
             'FROM project_to_user WHERE project_to_user.user_id = `project->users`.`user_id` AND project_to_user.project_id = project.project_id)'
+      ),
+      'permission'
+    ]
+
+const PROJECT_GROUP_PERMISSION_ATTR = // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
+    [ sequelize.literal(
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
+            'FROM project_group_to_user WHERE project_group_to_user.user_id = `project->project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+      ),
+      'permission'
+    ]
+
+const PROJECT_GROUP_PERMISSION_ATTR2 = // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
+    [ sequelize.literal(
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
+            'FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
       ),
       'permission'
     ]
@@ -51,15 +68,21 @@ function PROJECT_PERMISSION_CLAUSE(user) {
     return {
         $or: [
             { private: { $or: [0, null] } },
-            (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {})
+            (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {}),
+            //(user && user.user_name ? sequelize.literal("`project_groups->users`.`user_id` = '" + user.user_id + "'") : {}) // not working
         ]
     };
 }
 
+// Permission codes -- in order of decreasing access rights
+const PERMISSION_OWNER = 1;
+const PERMISSION_READ_WRITE = 2;
+const PERMISSION_READ_ONLY = 3;
+
 const PERMISSION_CODES = {
-    "owner": 1,
-    "read-write": 2,
-    "read-only": 3
+    "owner": PERMISSION_OWNER,
+    "read-write": PERMISSION_READ_WRITE,
+    "read-only": PERMISSION_READ_ONLY
 }
 
 function getKeyByValue(object, value) {
@@ -348,8 +371,8 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             models.investigator.create({
-                name: req.body.name,
-                institution: req.body.institution,
+                name: name,
+                institution: institution,
                 url: req.body.url
             })
         );
@@ -391,11 +414,45 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
-                models.project_to_project_group.create({
-                    project_group_id: req.params.project_group_id,
-                    project_id: req.params.project_id,
+                models.project_to_project_group.findOrCreate({
+                    where: {
+                        project_group_id: req.params.project_group_id,
+                        project_id: req.params.project_id
+                    }
+                })
+            )
+            .then( () =>
+                models.project.findOne({
+                    where: { project_id: req.params.project_id },
+                    include: [
+                        { model: models.project_group
+                        , attributes: [ 'project_group_id', 'group_name',
+                            [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user WHERE project_group_to_user.project_group_id = project_group_id)'), 'user_count' ]
+                          ]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                    ]
+                })
+            )
+            .then( project =>
+                project.project_groups
+            )
+        );
+    });
+
+    app.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
+        requireAuth(req);
+
+        toJsonOrError(res, next,
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
+            .then( () =>
+                models.project_to_project_group.destroy({
+                    where: {
+                        project_group_id: req.params.project_group_id,
+                        project_id: req.params.project_id
+                    }
                 })
             )
             .then( () => {
@@ -482,7 +539,7 @@ module.exports = function(app) {
     app.get('/projects', function(req, res, next) {
         toJsonOrError(res, next,
             models.project.findAll({
-                where: PROJECT_PERMISSION_CLAUSE(req.auth.user),
+                //where: PROJECT_PERMISSION_CLAUSE(req.auth.user), // replaced by manual filter below to get project_group access working
                 include: [
                     { model: models.investigator
                     , attributes: ['investigator_id', 'investigator_name']
@@ -499,10 +556,29 @@ module.exports = function(app) {
                     , attributes: ['user_id', 'user_name', 'first_name', 'last_name', PROJECT_PERMISSION_ATTR ]
                     , through: { attributes: [] } // remove connector table from output
                     },
+                    { model: models.project_group
+                    , attributes: ['project_group_id', 'group_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    , include: [
+                        { model: models.user
+                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', PROJECT_GROUP_PERMISSION_ATTR2 ]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                      ]
+                    }
                 ],
                 attributes: {
                     include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
                 }
+            })
+            .then( projects => { // filter on permission
+                return projects.filter(project => {
+                    var hasUserAccess = project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                    var hasGroupAccess = project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                    return !project.private
+                        || (req.auth.user && req.auth.user.user_name
+                            && (hasUserAccess || hasGroupAccess));
+                })
             })
         );
     });
@@ -574,7 +650,7 @@ module.exports = function(app) {
         var groups = req.body.groups;
 
         toJsonOrError(res, next,
-            checkProjectPermissions(project_id, req.auth.user)
+            requireProjectEditPermission(project_id, req.auth.user)
             .then( () =>
                 models.project.update(
                     { project_name: project_name,
@@ -636,7 +712,7 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
                 models.publication.destroy({ // FIXME add on cascade delete
                     where: {
@@ -658,7 +734,7 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
                 models.project_to_investigator.findOrCreate({
                     where: {
@@ -682,7 +758,7 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
                 models.project_to_investigator.destroy({
                     where: {
@@ -698,7 +774,7 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
                 models.project_to_user.destroy({ // First remove all existing connections
                     where: {
@@ -848,7 +924,7 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(req.params.project_id, req.auth.user)
+            requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
                 models.project_to_user.destroy({
                     where: {
@@ -903,7 +979,7 @@ module.exports = function(app) {
         errorOnNull(projectId);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(projectId, req.auth.user)
+            requireProjectEditPermission(projectId, req.auth.user)
             .then( () =>
                 models.publication.create({
                     project_id: projectId,
@@ -923,7 +999,7 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             models.publication.findOne({ where: { publication_id: req.params.publication_id } })
             .then( publication =>
-                checkProjectPermissions(publication.project_id, req.auth.user)
+                requireProjectEditPermission(publication.project_id, req.auth.user)
             )
             .then( () =>
                 models.publication.update(
@@ -950,7 +1026,7 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             models.publication.findOne({ where: { publication_id: req.params.publication_id } })
             .then( publication =>
-                checkProjectPermissions(publication.project_id, req.auth.user)
+                requireProjectEditPermission(publication.project_id, req.auth.user)
             )
             .then( () =>
                 models.publication.destroy({
@@ -998,6 +1074,16 @@ module.exports = function(app) {
                                     , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
                                     , through: { attributes: [] } // remove connector table from output
                                     },
+                                    { model: models.project_group
+                                    , attributes: [ 'project_group_id', 'group_name' ]
+                                    , through: { attributes: [] } // remove connector table from output
+                                    , include: [
+                                        { model: models.user
+                                        , attributes: ['user_id', 'user_name', PROJECT_GROUP_PERMISSION_ATTR ]
+                                        , through: { attributes: [] } // remove connector table from output
+                                        }
+                                      ]
+                                    }
                                 ]
                             },
                             { model: models.investigator
@@ -1102,13 +1188,23 @@ module.exports = function(app) {
             include: [
                 { model: models.project
                 , attributes: [ 'project_id', 'project_name', 'private' ]
-                //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see filter step below
+                //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see manual filter step below
                 , include: [
+                    { model: models.user
+                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.project_group
+                    , attributes: ['project_group_id', 'group_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    , include: [
                         { model: models.user
-                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', SAMPLE_PERMISSION_ATTR]
+                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', PROJECT_GROUP_PERMISSION_ATTR ]
                         , through: { attributes: [] } // remove connector table from output
                         }
-                    ]
+                      ]
+                    }
+                  ]
                 }
             ]
         };
@@ -1122,7 +1218,11 @@ module.exports = function(app) {
             models.sample.findAll(params)
             .then(samples => { // filter by permission -- workaround for broken clause above
                 return samples.filter(sample => {
-                    return !sample.project.private || (req.auth.user && req.auth.user.user_name && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name));
+                    var hasUserAccess = sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                    var hasGroupAccess = sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                    return !sample.project.private
+                        || (req.auth.user && req.auth.user.user_name
+                            && (hasUserAccess || hasGroupAccess));
                 })
             })
         );
@@ -1137,7 +1237,7 @@ module.exports = function(app) {
         errorOnNull(sample_name, project_id);
 
         toJsonOrError(res, next,
-            checkProjectPermissions(project_id, req.auth.user)
+            requireProjectEditPermission(project_id, req.auth.user)
             .then( () =>
                 models.sample.create({
                     sample_name: sample_name,
@@ -1829,40 +1929,84 @@ function toJsonOrError(res, next, promise) {
 }
 
 function checkProjectPermissions(projectId, user) {
-    //console.log("user.user_name", user.user_name);
-
-    var conditions = PROJECT_PERMISSION_CLAUSE(user);
-    conditions.project_id = projectId;
-
     return models.project.findOne({
-        where: conditions,
+        where: { project_id: projectId },
         include: [
+            { model: models.project_group
+            , attributes: [ 'project_group_id', 'group_name' ]
+            , through: { attributes: [] } // remove connector table from output
+            , include: [
+                { model: models.user
+                , attributes: [ 'user_id', 'user_name',
+                    [ sequelize.literal(
+                        '(SELECT permission FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+                      ),
+                      'permission'
+                    ]
+                  ]
+                , through: { attributes: [] } // remove connector table from output
+                }
+              ]
+            },
             { model: models.user
-            , attributes: [ 'user_name' ]
+            , attributes: [ 'user_id', 'user_name',
+                [ sequelize.literal(
+                    '(SELECT permission FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
+                  ),
+                  'permission'
+                ]
+              ]
             , through: { attributes: [] } // remove connector table from output
             }
         ]
     })
     .then( project => {
         if (!project)
-            throw(ERR_UNAUTHORIZED);
+            throw(ERR_NOT_FOUND);
+
+        var userPerm =
+            project.users &&
+                project.users
+                .filter(u => u.user_id == user.user_id)
+                .reduce((acc, u) => Math.min(u.dataValues.permission, acc), PERMISSION_READ_ONLY);
+
+        var groupPerm =
+            project.project_groups &&
+                project.project_groups
+                .reduce((acc, g) => acc.concat(g.users), [])
+                .filter(u => u.user_id == user.user_id)
+                .reduce((acc, u) => Math.min(u.dataValues.permission, acc), PERMISSION_READ_ONLY);
+
+        console.log("user permission:", userPerm);
+        console.log("group permission:", groupPerm);
+        if (!userPerm && !groupPerm)
+            throw(ERR_PERMISSION_DENIED);
+
+        return Math.min(userPerm, groupPerm);
     });
 }
 
 function checkSamplePermissions(sampleId, user) {
-    //console.log("user.user_name", user.user_name);
     return models.sample.findOne({
-        where: {
-            sample_id: sampleId,
-        }
+        where: { sample_id: sampleId }
     })
     .then( sample => {
         if (!sample)
             throw(ERR_NOT_FOUND);
 
-        //console.log("sample.project_id=", sample.project_id);
         return checkProjectPermissions(sample.project_id, user);
     });
+}
+
+function requireProjectEditPermission(projectId, user) {
+    return checkProjectPermissions(projectId, user)
+        .then( permission => {
+            if (permission >= PERMISSION_READ_ONLY)
+                throw(ERR_PERMISSION_DENIED);
+
+            console.log("User " + user.user_name + "/" + user.user_id + " has edit access");
+            return permission;
+        });
 }
 
 function errorOnNull() {
