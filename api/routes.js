@@ -64,6 +64,14 @@ const PROJECT_GROUP_PERMISSION_ATTR2 = // FIXME can this be combined with PROJEC
       'permission'
     ]
 
+const PROJECT_GROUP_PERMISSION_ATTR3 = // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
+    [ sequelize.literal(
+        '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
+            'FROM project_group_to_user WHERE project_group_to_user.user_id = users.user_id AND project_group_to_user.project_group_id = project_group_id)'
+      ),
+      'permission'
+    ]
+
 function PROJECT_PERMISSION_CLAUSE(user) {
     return {
         $or: [
@@ -78,11 +86,19 @@ function PROJECT_PERMISSION_CLAUSE(user) {
 const PERMISSION_OWNER = 1;
 const PERMISSION_READ_WRITE = 2;
 const PERMISSION_READ_ONLY = 3;
+const PERMISSION_NONE = 4;
 
 const PERMISSION_CODES = {
     "owner": PERMISSION_OWNER,
     "read-write": PERMISSION_READ_WRITE,
-    "read-only": PERMISSION_READ_ONLY
+    "read-only": PERMISSION_READ_ONLY,
+    "none": PERMISSION_NONE
+}
+
+const AGAVE_PERMISSION_CODES = {
+    "READ_WRITE": PERMISSION_READ_WRITE,
+    "READ": PERMISSION_READ_ONLY,
+    "NONE": PERMISSION_NONE
 }
 
 function getKeyByValue(object, value) {
@@ -410,6 +426,7 @@ module.exports = function(app) {
         );
     });
 
+    // Add a Project to a Project Group (and share with the group's user list)
     app.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
         requireAuth(req);
 
@@ -422,6 +439,25 @@ module.exports = function(app) {
                         project_id: req.params.project_id
                     }
                 })
+            )
+            .then( () =>
+                models.project_group.findOne({
+                    where: { project_group_id: req.params.project_group_id },
+                    include: [
+                        { model: models.user
+                        , attributes: [ 'user_id', 'user_name', PROJECT_GROUP_PERMISSION_ATTR3 ]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                    ]
+                })
+            )
+            .then( project_group =>
+                Promise.all(
+                    project_group.users
+                    .map( user => {
+                        return updateProjectFilePermissions(req.params.project_id, user.user_id, req.headers.authorization, user.get().permission)
+                    })
+                )
             )
             .then( () =>
                 models.project.findOne({
@@ -442,6 +478,7 @@ module.exports = function(app) {
         );
     });
 
+    // Remove a Project from a Project Group (and unshare with the group's user list)
     app.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
         requireAuth(req);
 
@@ -790,7 +827,7 @@ module.exports = function(app) {
                     permission: PERMISSION_CODES[req.body.permission]
                 })
             )
-            .then( updateProjectFilePermissions(req) )
+            .then( updateProjectFilePermissions(req.params.project_id, req.params.user_id, req.headers.authorization, req.body.permission) )
             .then( () =>
                 models.project.findOne({
                     where: { project_id: req.params.project_id },
@@ -806,12 +843,8 @@ module.exports = function(app) {
     });
 
     // Move into own module
-    function updateProjectFilePermissions(req, files) {
-        var project_id = req.params.project_id;
-        var user_id = req.params.user_id;
-        var token = req.headers.authorization;
-        var agavePermission = toAgavePermission(req.body.permission);
-
+    function updateProjectFilePermissions(project_id, user_id, token, permission, files) {
+        console.log("updateProjectFilePermissions", project_id, user_id, permission)
         return models.project.findOne({
             where: { project_id: project_id },
             include: [
@@ -839,14 +872,13 @@ module.exports = function(app) {
                 files = files.map(f => f.file);
             }
 
+            var agavePermission = toAgavePermission(permission);
+
             return agaveUpdateFilePermissions(username, token, agavePermission, files);
         });
     }
 
-    function updateSampleFilePermissions(req, files) {
-        var sample_id = req.params.sample_id;
-        var token = req.headers.authorization;
-
+    function updateSampleFilePermissions(sample_id, token, files) {
         return models.sample.findOne({
             where: { sample_id: sample_id },
             include: [
@@ -856,6 +888,16 @@ module.exports = function(app) {
                         , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name' ]
                         , through: { attributes: [ 'permission' ] }
                         },
+                        { model: models.project_group
+                        , attributes: [ 'project_group_id', 'group_name' ]
+                        , through: { attributes: [] } // remove connector table from output
+                        , include: [
+                            { model: models.user
+                            , attributes: [ 'user_id', 'user_name' ]
+                            , through: { attributes: [ 'permission' ] }
+                            }
+                          ]
+                        }
                     ]
                 },
                 { model: models.sample_file
@@ -866,10 +908,21 @@ module.exports = function(app) {
             if (!files) // use all sample files if none given
                 files = sample.sample_files.map(f => f.file);
 
+            // Merge users from direct sharing and through groups, preventing duplicates
+            var users = sample.project.users;
+            var seen = users.reduce((map, user) => { map[user.user_id] = 1; return map; }, {});
+            var allUsers = sample.project.project_groups
+                .reduce((acc, g) => acc.concat(g.users), [])
+                .reduce((acc, u) => {
+                    if (!seen[u.user_id])
+                        acc.push(u);
+                    return acc;
+                }, []).concat(users);
+
             return Promise.all(
-                sample.project.users.map(u => {
-                    var agavePermission = toAgavePermission(getKeyByValue(PERMISSION_CODES, u.project_to_user.permission));
-                    console.log("!!!!!!", u.user_name, agavePermission);
+                allUsers.map(u => {
+                    var permission = (u.project_to_user ? u.project_to_user.permission : u.project_group_to_user.permission);
+                    var agavePermission = toAgavePermission(getKeyByValue(PERMISSION_CODES, permission));
                     return agaveUpdateFilePermissions(u.user_name, token, agavePermission, files);
                 })
             );
@@ -879,33 +932,71 @@ module.exports = function(app) {
     function agaveUpdateFilePermissions(username, token, permission, files) {
         return Promise.all(
             files.map(f => {
-                var url = config.agaveBaseUrl + "/files/v2/pems/system/data.iplantcollaborative.org" + f;
-                var options = {
-                    method: "POST",
-                    uri: url,
-                    headers: {
-                        Accept: "application/json" ,
-                        Authorization: token
-                    },
-                    form: {
-                        username: username,
-                        permission: permission,
-                        recursive: false
-                    },
-                    json: true
-                };
+                return agaveGetFilePermissions(username, token, f)
+                    .then( curPermission => {
+                        if (AGAVE_PERMISSION_CODES[curPermission] <= AGAVE_PERMISSION_CODES[permission]) {
+                            console.log("No change to permission: ", username, curPermission, permission, f)
+                            return; // only change permission if it expands access (e.g. from READ to READ_WRITE)
+                        }
 
-                console.log("Sending POST", url, username, permission);
-                return requestp(options);
-//                   .then(function (parsedBody) {
-//                     console.log(parsedBody);
-//                   });
+                        var url = config.agaveBaseUrl + "/files/v2/pems/system/data.iplantcollaborative.org" + f;
+                        var options = {
+                            method: "POST",
+                            uri: url,
+                            headers: {
+                                Accept: "application/json" ,
+                                Authorization: token
+                            },
+                            form: {
+                                username: username,
+                                permission: permission,
+                                recursive: false
+                            },
+                            json: true
+                        };
+
+                        console.log("Sending POST", url, username, permission);
+                        return requestp(options);
+                    });
 //                 .catch(function (err) {
 //                     console.error(err.message);
 //                  res.status(500).send("Agave permissions request failed");
 //              });
             })
         );
+    }
+
+    function agaveGetFilePermissions(username, token, filepath) {
+        var url = config.agaveBaseUrl + "/files/v2/pems/system/data.iplantcollaborative.org" + filepath;
+        var options = {
+            method: "GET",
+            uri: url,
+            headers: {
+                Accept: "application/json" ,
+                Authorization: token
+            },
+            form: {
+                username: username,
+                recursive: false
+            },
+            json: true
+        };
+
+        console.log("Sending GET", url, username);
+        return requestp(options)
+            .then(response => {
+                if (response && response.result) {
+                    var user = response.result.find(user => user.username == username);
+                    if (user && user.permission) {
+                        if (user.permission.write)
+                            return "READ_WRITE";
+                        if (user.permission.read)
+                            return "READ";
+                    }
+                }
+
+                return "NONE";
+            });
     }
 
     function toAgavePermission(perm) {
@@ -933,7 +1024,6 @@ module.exports = function(app) {
                     }
                 })
             )
-            .then( updateProjectFilePermissions(req) )
         );
     });
 
@@ -1247,14 +1337,14 @@ module.exports = function(app) {
             )
             .then( sample => {
                 return mongo()
-                .then( db =>
-                    db.collection('sample').insert({
-                        specimen__sample_id: sample.sample_id,
-                        specimen__sample_name: sample_name,
-                        specimen__project_id: project_id
-                    })
-                )
-                .then( () => { return sample });
+                    .then( db =>
+                        db.collection('sample').insert({
+                            specimen__sample_id: sample.sample_id,
+                            specimen__sample_name: sample_name,
+                            specimen__project_id: project_id
+                        })
+                    )
+                    .then( () => { return sample });
             })
             .then( sample => {
                 return models.sample.findOne({
@@ -1634,7 +1724,7 @@ module.exports = function(app) {
                     )
                 )
             )
-            .then( updateSampleFilePermissions(req, files) )
+            .then( updateSampleFilePermissions(req.params.sample_id, req.headers.authorization, files) )
             .then( () =>
                 models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
@@ -1649,6 +1739,29 @@ module.exports = function(app) {
                         }
                     ]
                 })
+            )
+        );
+    });
+
+    app.post('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function(req, res, next) {
+        requireAuth(req);
+
+        var sample_id = req.params.sample_id;
+        var sample_file_id = req.params.file_id;
+        var type_id = req.body.type_id;
+
+        errorOnNull(sample_id, type_id);
+
+        toJsonOrError(res, next,
+            checkSamplePermissions(sample_id, req.auth.user)
+            .then( () =>
+                models.sample_file.update(
+                    { sample_file_type_id: type_id },
+                    { where: { sample_file_id: sample_file_id } }
+                )
+            )
+            .then( () =>
+                "success"
             )
         );
     });
@@ -1968,14 +2081,14 @@ function checkProjectPermissions(projectId, user) {
             project.users &&
                 project.users
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.dataValues.permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
 
         var groupPerm =
             project.project_groups &&
                 project.project_groups
                 .reduce((acc, g) => acc.concat(g.users), [])
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.dataValues.permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
 
         console.log("user permission:", userPerm);
         console.log("group permission:", groupPerm);
