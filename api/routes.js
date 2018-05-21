@@ -751,6 +751,21 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
+                models.project.findOne({
+                    where: { project_id: req.params.project_id },
+                    include: [
+                        { model: models.sample },
+                    ]
+                })
+            )
+            .then( project => {
+                return Promise.all(
+                    project.samples.map( sample =>
+                        decrementSampleKeys(sample.sample_id)
+                    )
+                )
+            })
+            .then( () =>
                 models.publication.destroy({ // FIXME add on cascade delete
                     where: {
                         project_id: req.params.project_id
@@ -1274,6 +1289,7 @@ module.exports = function(app) {
                 , 'sample_acc'
                 , 'sample_type'
                 , 'project_id'
+                , [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
                 ],
             include: [
                 { model: models.project
@@ -1387,17 +1403,29 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
+            // Remove file entries from MySQL DB
             .then( () =>
-                models.sample_file.destroy({
+                models.sample_file.destroy({ //TODO is this necessary or handled by cascade?
                     where: { sample_id: req.params.sample_id }
                 })
             )
+            // Remove sample from MySQL DB
             .then( () =>
                 models.sample.destroy({
                     where: { sample_id: req.params.sample_id }
                 })
             )
-            .then( res.send("1") )
+            // Update sample key counts
+            .then( () =>
+                decrementSampleKeys(req.params.sample_id)
+            )
+            // Remove sample from Mongo DB
+            .then( () =>
+                mongo()
+                .then( db =>
+                    db.collection('sample').remove({ "specimen__sample_id": 1*req.params.sample_id })
+                )
+            )
         );
     });
 
@@ -1459,7 +1487,7 @@ module.exports = function(app) {
                         { $set: obj }
                     );
 
-                    db.collection('sampleKeys').findOne(
+                    db.collection('sampleKeys').findOne( //FIXME move into function
                         { "_id": { "key": key } },
                         (err, item) => {
                             if (item) {
@@ -2366,4 +2394,75 @@ function getMetaSearchResults(db, query) {
       reject("Bad query (" + JSON.stringify(query) + ")");
     }
   });
+}
+
+function decrementSampleKeys(sampleId) {
+    console.log("Removing all sampleKey entries for sample", sampleId);
+
+    return mongo()
+        .then( db =>
+            getSample(db, sampleId)
+            .then( sample =>
+                Promise.all(
+                    Object.keys(sample)
+                    .filter(key => key.startsWith("specimen__"))
+                    .map(key => {
+                        return decrementSampleKey(db, key, sample[key])
+                    })
+                )
+            )
+        );
+}
+
+function decrementSampleKey(db, key, value) {
+    console.log("Removing sampleKey entry", key, value);
+
+    return new Promise(function (resolve, reject) {
+        db.collection('sampleKeys').findOne(
+            { "_id": { "key": key } },
+            (err, item) => {
+                if (err)
+                    reject(err);
+
+                if (item) {
+                    db.collection('sampleKeys').updateOne(
+                        {
+                            "_id" : {
+                                "key" : key
+                            }
+                        },
+                        {
+                            "value" : {
+                                "types" : {
+                                    "Number" : ( isNaN(value) && item.value.types.Number > 0 ? item.value.types.Number : item.value.types.Number - 1 ),
+                                    "String" : ( isNaN(value) && item.value.types.String > 0 ? item.value.types.String - 1 : item.value.types.String )
+                                }
+                            },
+                            "totalOccurrences" : item.totalOccurrences > 0 ? item.totalOccurrences - 1 : item.totalOccurrences,
+                            "percentContaining" : 100 // FIXME this is wrong (but unused so no impact)
+                        },
+                        (err, item) => {
+                            if (err)
+                                reject(err);
+                        }
+                    );
+
+                    resolve();
+                }
+            }
+        );
+    });
+}
+
+function getSample(db, sampleId) {
+    return new Promise(function (resolve, reject) {
+        db.collection('sample').findOne(
+            { "specimen__sample_id": sampleId*1 }, // ensure integer value
+            (err, item) => {
+                if (err)
+                    reject(err);
+                resolve(item);
+            }
+        );
+    });
 }
