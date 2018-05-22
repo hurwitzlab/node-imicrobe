@@ -1621,6 +1621,10 @@ module.exports = function(app) {
                 })
             )
             .then( sample =>
+                requireProjectEditPermission(sample.project_id, req.auth.user)
+                .then( () => sample )
+            )
+            .then( sample =>
                 logAdd(req, {
                     title: "Remove sample '" + sample.sample_name + "'",
                     type: "removeSample",
@@ -2674,15 +2678,18 @@ function decrementSampleKeys(sampleId) {
     return mongo()
         .then( db =>
             getSample(db, sampleId)
-            .then( sample =>
-                Promise.all(
+            .then( sample => {
+                if (!sample || Object.keys(sample).length == 0)
+                    return;
+
+                return Promise.all(
                     Object.keys(sample)
                     .filter(key => key.startsWith("specimen__"))
                     .map(key => {
                         return decrementSampleKey(db, key, sample[key])
                     })
                 )
-            )
+            })
         );
 }
 
