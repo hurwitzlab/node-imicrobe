@@ -189,10 +189,14 @@ module.exports = function(app) {
                 params: params
             })
             .then( () =>
+                models.app.findOne({ where: { app_id: app_id } })
+            )
+            .then( app =>
                 logAdd(req, {
-                    title: "Run app " + app_id,
+                    title: "Run app " + app.app_name,
                     type: "runApp",
-                    app_id: app_id
+                    app_id: app_id,
+                    app_name: app.app_name
                 })
             )
         );
@@ -461,19 +465,30 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
-                logAdd(req, {
-                    title: "Adding project " + req.params.project_id + " to project group " + req.params.project_group_id,
-                    type: "addProjectToProjectGroup",
-                    project_id: req.params.project_id,
-                    project_group_id: req.params.project_group_id
-                })
-            )
-            .then( () =>
                 models.project_to_project_group.findOrCreate({
                     where: {
                         project_group_id: req.params.project_group_id,
                         project_id: req.params.project_id
                     }
+                })
+            )
+            // Get project and group for logging
+            .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.project_group.findOne({
+                        where: { project_group_id: req.params.project_group_id }
+                    })
+                ])
+            )
+            .then( results =>
+                logAdd(req, {
+                    title: "Add project '" + results[0].project_name + "' to group '" + results[1].group_name + "'",
+                    type: "addProjectToProjectGroup",
+                    project_id: req.params.project_id,
+                    project_group_id: req.params.project_group_id
                 })
             )
             .then( () =>
@@ -520,9 +535,20 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
+            // Get project and group for logging
             .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.project_group.findOne({
+                        where: { project_group_id: req.params.project_group_id }
+                    })
+                ])
+            )
+            .then( results =>
                 logAdd(req, {
-                    title: "Removing project " + req.params.project_id + " from project group " + req.params.project_group_id,
+                    title: "Remove project '" + results[0].project_name + "' from group '" + results[1].group_name + "'",
                     type: "removeProjectFromProjectGroup",
                     project_id: req.params.project_id,
                     project_group_id: req.params.project_group_id
@@ -717,10 +743,11 @@ module.exports = function(app) {
             })
             .then( project =>
                 logAdd(req, {
-                    title: "Adding project " + project.get().project_id,
+                    title: "Add project '" + project_name + "'",
                     type: "addProject",
                     project_id: project.get().project_id
                 })
+                .then( () => project )
             )
         );
     });
@@ -741,7 +768,7 @@ module.exports = function(app) {
             requireProjectEditPermission(project_id, req.auth.user)
             .then( () =>
                 logAdd(req, {
-                    title: "Update project " + project_id,
+                    title: "Update project '" + project_name + "'",
                     type: "updateProject",
                     project_id: project_id
                 })
@@ -809,19 +836,20 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
             .then( () =>
-                logAdd(req, {
-                    title: "Remove project " + project_id,
-                    type: "removeProject",
-                    project_id: project_id
-                })
-            )
-            .then( () =>
                 models.project.findOne({
                     where: { project_id: req.params.project_id },
                     include: [
                         { model: models.sample },
                     ]
                 })
+            )
+            .then( project =>
+                logAdd(req, {
+                    title: "Remove project '" + project.project_name + "'",
+                    type: "removeProject",
+                    project_id: project.project_id
+                })
+                .then( () => project )
             )
             .then( project => {
                 return Promise.all(
@@ -852,9 +880,20 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
+            // Get project and investigator for logging
             .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.investigator.findOne({
+                        where: { investigator_id: req.params.investigator_id }
+                    })
+                ])
+            )
+            .then( results =>
                 logAdd(req, {
-                    title: "Add investigator " + req.params.investigator_id + " to project " + req.params.project_id,
+                    title: "Add investigator " + results[1].investigator_name + " to project '" + results[0].project_name + "'",
                     type: "addInvestigatorToProject",
                     project_id: req.params.project_id,
                     investigator_id: req.params.investigator_id
@@ -884,9 +923,20 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
+            // Get project and investigator for logging
             .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.investigator.findOne({
+                        where: { investigator_id: req.params.investigator_id }
+                    })
+                ])
+            )
+            .then( results =>
                 logAdd(req, {
-                    title: "Remove investigator " + req.params.investigator_id + " from project " + req.params.project_id,
+                    title: "Remove investigator " + results[1].investigator_name + " from project '" + results[0].project_name + "'",
                     type: "removeInvestigatorFromProject",
                     project_id: req.params.project_id,
                     investigator_id: req.params.investigator_id
@@ -908,12 +958,24 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
+            // Get project and user for logging
             .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.user.findOne({
+                        where: { user_id: req.params.user_id }
+                    })
+                ])
+            )
+            .then( results =>
                 logAdd(req, {
-                    title: "Add user " + req.params.user_id + " to project " + req.params.project_id,
+                    title: "Add user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") to project '" + results[0].project_name + "'",
                     type: "addUserToProject",
                     project_id: req.params.project_id,
-                    target_user_id: req.params.user_id
+                    target_user_id: req.params.user_id,
+                    permission: req.body.permission
                 })
             )
             .then( () =>
@@ -1120,9 +1182,20 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             requireProjectEditPermission(req.params.project_id, req.auth.user)
+            // Get project and user for logging
             .then( () =>
+                Promise.all([
+                    models.project.findOne({
+                        where: { project_id: req.params.project_id }
+                    }),
+                    models.user.findOne({
+                        where: { user_id: req.params.user_id }
+                    })
+                ])
+            )
+            .then( results =>
                 logAdd(req, {
-                    title: "Remove user " + req.params.user_id + " from project " + req.params.project_id,
+                    title: "Remove user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") from project '" + results[0].project_name + "'",
                     type: "removeUserFromProject",
                     project_id: req.params.project_id,
                     target_user_id: req.params.user_id
@@ -1193,30 +1266,33 @@ module.exports = function(app) {
                 })
             )
             .then( publication =>
-                logAdd(req, {
-                    title: "Add publication " + publication.get().publication_id + " to project " + projectId,
-                    type: "addPublication",
-                    project_id: projectId,
-                    publication_id: publication.get().publication_id
-                })
+                models.project.findOne({ where: { project_id: projectId } })
+                .then( project =>
+                    logAdd(req, {
+                        title: "Add publication '" + publication.get().title + "' to project '" + project.project_name + "'",
+                        type: "addPublication",
+                        project_id: projectId,
+                        publication_id: publication.get().publication_id
+                    })
+                )
             )
         );
     });
 
-    app.post('/publications/:publication_id(\\d+)', function (req, res, next) {
+    app.post('/publications/:publication_id(\\d+)', function (req, res, next) { //FIXME change route to be projects/publications?
         requireAuth(req);
 
         toJsonOrError(res, next,
-            logAdd(req, {
-                title: "Update publication " + req.params.publication_id,
-                type: "updatePublication",
-                publication_id: req.params.publication_id
-            })
-            .then( () =>
-                models.publication.findOne({ where: { publication_id: req.params.publication_id } })
-            )
+            models.publication.findOne({ where: { publication_id: req.params.publication_id } })
             .then( publication =>
                 requireProjectEditPermission(publication.project_id, req.auth.user)
+                .then( () =>
+                    logAdd(req, {
+                        title: "Update publication '" + publication.title + "'",
+                        type: "updatePublication",
+                        publication_id: req.params.publication_id
+                    })
+                )
             )
             .then( () =>
                 models.publication.update(
@@ -1241,16 +1317,16 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            logAdd(req, {
-                title: "Remove publication " + req.params.publication_id,
-                type: "removePublication",
-                publication_id: req.params.publication_id
-            })
-            .then( () =>
-                models.publication.findOne({ where: { publication_id: req.params.publication_id } })
-            )
+            models.publication.findOne({ where: { publication_id: req.params.publication_id } })
             .then( publication =>
                 requireProjectEditPermission(publication.project_id, req.auth.user)
+                .then( () =>
+                    logAdd(req, {
+                        title: "Remove publication '" + publication.title + "'",
+                        type: "removePublication",
+                        publication_id: req.params.publication_id
+                    })
+                )
             )
             .then( () =>
                 models.publication.destroy({
@@ -1472,7 +1548,7 @@ module.exports = function(app) {
             )
             .then( sample =>
                 logAdd(req, {
-                    title: "Add sample " + sample.sample_id,
+                    title: "Add sample '" + sample_name + "'",
                     type: "addSample",
                     sample_id: sample.sample_id
                 })
@@ -1506,13 +1582,6 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
             .then( () =>
-                logAdd(req, {
-                    title: "Update sample " + req.params.sample_id,
-                    type: "updateSample",
-                    sample_id: req.params.sample_id
-                })
-            )
-            .then( () =>
                 models.sample.update(
                     { sample_name: req.body.sample_name,
                       sample_acc: req.body.sample_code,
@@ -1521,13 +1590,21 @@ module.exports = function(app) {
                     { where: { sample_id: req.params.sample_id } }
                 )
             )
-            .then( result =>
+            .then( () =>
                 models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
                     include: [
                         { model: models.project },
                     ]
                 })
+                .then( sample =>
+                    logAdd(req, {
+                        title: "Update sample '" + sample.sample_name + "'",
+                        type: "updateSample",
+                        sample_id: sample.sample_id
+                    })
+                    .then( () => sample )
+                )
             )
         );
     });
@@ -1538,10 +1615,15 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
             .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: req.params.sample_id },
+                })
+            )
+            .then( sample =>
                 logAdd(req, {
-                    title: "Remove sample " + req.params.sample_id,
+                    title: "Remove sample '" + sample.sample_name + "'",
                     type: "removeSample",
-                    sample_id: req.params.sample_id
+                    sample_id: sample.sample_id
                 })
             )
             // Remove file entries from MySQL DB
@@ -1586,7 +1668,7 @@ module.exports = function(app) {
             checkSamplePermissions(sample_id, req.auth.user)
             .then( () =>
                 logAdd(req, {
-                    title: "Add sample attribute " + req.params.sample_id,
+                    title: "Add sample attribute " + attr_type + " = " + attr_value,
                     type: "addSampleAttribute",
                     sample_id: req.params.sample_id,
                     attr_type: req.body.attr_type,
@@ -1637,53 +1719,7 @@ module.exports = function(app) {
                         { $set: obj }
                     );
 
-                    db.collection('sampleKeys').findOne( //FIXME move into function
-                        { "_id": { "key": key } },
-                        (err, item) => {
-                            if (item) {
-                                db.collection('sampleKeys').updateOne(
-                                    {
-                                        "_id" : {
-                                            "key" : key
-                                        },
-                                    },
-                                    {
-                                        "value" : {
-                                            "types" : {
-                                                "Number" : ( isNaN(attr_value) ? item.value.types.Number : item.value.types.Number + 1 ),
-                                                "String" : ( isNaN(attr_value) ? item.value.types.String + 1 : item.value.types.String )
-                                            }
-                                        },
-                                        "totalOccurrences" : item.totalOccurrences + 1,
-                                        "percentContaining" : 100 // FIXME this is wrong
-                                    },
-                                    (err, item) => {
-                                        // TODO error handling
-                                    }
-                                );
-                            }
-                            else {
-                                db.collection('sampleKeys').insert(
-                                    {
-                                        "_id" : {
-                                            "key" : key
-                                        },
-                                        "value" : {
-                                            "types" : {
-                                                "Number" : ( isNaN(attr_value) ? 0 : 1 ),
-                                                "String" : ( isNaN(attr_value) ? 1 : 0 )
-                                            }
-                                        },
-                                        "totalOccurrences" : 1,
-                                        "percentContaining" : 100 // FIXME this is wrong
-                                    },
-                                    (err, item) => {
-                                        // TODO error handling
-                                    }
-                                );
-                            }
-                        }
-                    );
+                    return incrementSampleKey(db, key, attr_value);
                 })
             )
             // Return sample with updated attributes
@@ -1722,7 +1758,7 @@ module.exports = function(app) {
             checkSamplePermissions(sample_id, req.auth.user)
             .then( () =>
                 logAdd(req, {
-                    title: "Update sample attribute " + req.params.sample_id,
+                    title: "Update sample attribute " + attr_type + " = " + attr_value,
                     type: "updateSampleAttribute",
                     sample_id: req.params.sample_id,
                     attr_type: req.body.attr_type,
@@ -1812,14 +1848,6 @@ module.exports = function(app) {
 
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
-            .then( () =>
-                logAdd(req, {
-                    title: "Remove sample attribute " + req.params.sample_id,
-                    type: "removeSampleAttribute",
-                    sample_id: req.params.sample_id,
-                    attr_id: req.body.attr_id
-                })
-            )
             // Get attribute
             .then( () =>
                 models.sample_attr.findOne({
@@ -1831,16 +1859,24 @@ module.exports = function(app) {
             )
             // Remove from Mongo DB using type name
             .then( sample_attr =>
-                mongo()
-                .then( db => {
-                    var obj = {};
-                    obj["specimen__"+sample_attr.sample_attr_type.type] = "";
-
-                    db.collection('sample').updateOne(
-                        { "specimen__sample_id": 1*req.params.sample_id },
-                        { $unset: obj }
-                    )
+                logAdd(req, {
+                    title: "Remove sample attribute '" + sample_attr.sample_attr_type.type + "'",
+                    type: "removeSampleAttribute",
+                    sample_id: req.params.sample_id,
+                    attr_id: req.body.attr_id
                 })
+                .then( () =>
+                    mongo()
+                    .then( db => {
+                        var obj = {};
+                        obj["specimen__"+sample_attr.sample_attr_type.type] = "";
+
+                        db.collection('sample').updateOne(
+                            { "specimen__sample_id": 1*req.params.sample_id },
+                            { $unset: obj }
+                        )
+                    })
+                )
             )
             // Remove from MySQL DB using id
             .then( () =>
@@ -1907,10 +1943,15 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
             .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: req.params.sample_id }
+                })
+            )
+            .then( sample =>
                 logAdd(req, {
-                    title: "Add sample files " + req.params.sample_id,
+                    title: "Add " + files.length + " files to sample '" + sample.sample_name + "'",
                     type: "addSampleFiles",
-                    sample_id: req.params.sample_id,
+                    sample_id: sample.sample_id,
                     files: files
                 })
             )
@@ -1958,8 +1999,13 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             checkSamplePermissions(sample_id, req.auth.user)
             .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: req.params.sample_id }
+                })
+            )
+            .then( sample =>
                 logAdd(req, {
-                    title: "Update sample file " + sample_file_id,
+                    title: "Update file " + sample_file_id + " for sample '" + sample.sample_name + "'",
                     type: "updateSampleFile",
                     sample_id: sample_id,
                     sample_file_id: sample_file_id,
@@ -1984,8 +2030,13 @@ module.exports = function(app) {
         toJsonOrError(res, next,
             checkSamplePermissions(req.params.sample_id, req.auth.user)
             .then( () =>
+                models.sample.findOne({
+                    where: { sample_id: req.params.sample_id }
+                })
+            )
+            .then( sample =>
                 logAdd(req, {
-                    title: "Remove sample file " + req.params.file_id,
+                    title: "Remove file " + req.params.file_id + " from sample '" + sample.sample_name + "'",
                     type: "removeSampleFile",
                     sample_id: req.params.sample_id,
                     sample_file_id: req.params.file_id
@@ -1996,8 +2047,8 @@ module.exports = function(app) {
                     where: { sample_file_id: req.params.file_id }
                 })
             )
-            .then( () => {
-                return models.sample.findOne({
+            .then( () =>
+                models.sample.findOne({
                     where: { sample_id: req.params.sample_id },
                     include: [
                         { model: models.project },
@@ -2010,7 +2061,7 @@ module.exports = function(app) {
                         }
                     ]
                 })
-            })
+            )
         );
     });
 
@@ -2160,26 +2211,47 @@ module.exports = function(app) {
         requireAuth(req);
 
         toJsonOrError(res, next,
-            models.user.findOne({
-                where: { user_id: req.params.id },
-                include: [
-                    { model: models.project,
-                      through: { attributes: [] }, // remove connector table from output
-                      include: [
-                        { model: models.investigator,
-                          through: { attributes: [] } // remove connector table from output
-                        },
-                        { model: models.publication },
-                        { model: models.sample,
+            Promise.all([
+                models.user.findOne({
+                    where: { user_id: req.params.id },
+                    include: [
+                        { model: models.project,
+                          through: { attributes: [] }, // remove connector table from output
                           include: [
-                            { model: models.sample_file },
-                            { model: models.project
+                            { model: models.investigator,
+                              through: { attributes: [] } // remove connector table from output
+                            },
+                            { model: models.publication },
+                            { model: models.sample,
+                              include: [
+                                { model: models.sample_file },
+                                { model: models.project
+                                }
+                              ]
                             }
                           ]
                         }
-                      ]
-                    }
-                ]
+                    ]
+                }),
+                mongo()
+                .then( db => {
+                    return new Promise(function (resolve, reject) {
+                        db.collection('log').find(
+                            { user_id: req.params.id*1 } // ensure integer value
+                        )
+                        .sort({ date: 1 })
+                        .toArray( (err, items) => {
+                            if (err)
+                                reject(err);
+                            resolve(items);
+                        });
+                    });
+                })
+            ])
+            .then( results => {
+                var user = results[0];
+                user.dataValues.log = results[1];
+                return user;
             })
         );
     });
@@ -2641,6 +2713,65 @@ function decrementSampleKey(db, key, value) {
 
                     resolve();
                 }
+            }
+        );
+    });
+}
+
+function incrementSampleKey(db, key, value) {
+    return new Promise(function (resolve, reject) {
+        db.collection('sampleKeys').findOne(
+            { "_id": { "key": key } },
+            (err, item) => {
+                if (err)
+                    reject(err);
+
+                if (item) {
+                    db.collection('sampleKeys').updateOne(
+                        {
+                            "_id" : {
+                                "key" : key
+                            },
+                        },
+                        {
+                            "value" : {
+                                "types" : {
+                                    "Number" : ( isNaN(value) ? item.value.types.Number : item.value.types.Number + 1 ),
+                                    "String" : ( isNaN(value) ? item.value.types.String + 1 : item.value.types.String )
+                                }
+                            },
+                            "totalOccurrences" : item.totalOccurrences + 1,
+                            "percentContaining" : 100 // FIXME this is wrong (but unused so no impact)
+                        },
+                        (err, item) => {
+                            if (err)
+                                reject(err);
+                        }
+                    );
+                }
+                else {
+                    db.collection('sampleKeys').insert(
+                        {
+                            "_id" : {
+                                "key" : key
+                            },
+                            "value" : {
+                                "types" : {
+                                    "Number" : ( isNaN(value) ? 0 : 1 ),
+                                    "String" : ( isNaN(value) ? 1 : 0 )
+                                }
+                            },
+                            "totalOccurrences" : 1,
+                            "percentContaining" : 100 // FIXME this is wrong (but unused so no impact)
+                        },
+                        (err, item) => {
+                            if (err)
+                                reject(err);
+                        }
+                    );
+                }
+
+                resolve();
             }
         );
     });
