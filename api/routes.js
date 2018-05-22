@@ -1274,6 +1274,7 @@ module.exports = function(app) {
                         project_id: projectId,
                         publication_id: publication.get().publication_id
                     })
+                    .then( () => publication )
                 )
             )
         );
