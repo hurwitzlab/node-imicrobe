@@ -2224,6 +2224,13 @@ module.exports = function(app) {
                             },
                             { model: models.publication },
                             { model: models.sample,
+                              attributes: [
+                                "sample_id",
+                                "sample_name",
+                                "sample_acc",
+                                "sample_type",
+                                [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = `projects->samples`.`sample_id`)'), 'sample_file_count' ]
+                              ],
                               include: [
                                 { model: models.sample_file },
                                 { model: models.project
