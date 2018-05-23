@@ -2284,14 +2284,25 @@ module.exports = function(app) {
         var username = req.auth.user.user_name;
         errorOnNull(username);
 
+        // Add user if not already present
         models.user.findOrCreate({
             where: { user_name: username }
         })
         .spread( (user, created) => {
-            models.login.create({
-                user_id: user.user_id,
-                login_date: sequelize.fn('NOW')
-            })
+            // For new user set first_name/last_name, or update for existing user (in case they changed them)
+            models.user.update(
+                { first_name: req.auth.user.first_name
+                , last_name: req.auth.user.last_name
+                },
+                { where: { user_name: username } }
+            )
+            // Record login
+            .then( () =>
+                models.login.create({
+                    user_id: user.user_id,
+                    login_date: sequelize.fn('NOW')
+                })
+            )
             .then( login =>
                 res.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
                     login_id: login.login_id,
@@ -2451,7 +2462,14 @@ function agaveTokenValidator(req, res, next) {
         req.auth.profile = profile;
         if (profile) {
             return models.user.findOne({
-                where: { user_name: profile.username }
+                where: {
+                    user_name: profile.username
+                }
+            })
+            .then( user => {
+                user.dataValues.first_name = profile.first_name;
+                user.dataValues.last_name = profile.last_name;
+                return user;
             });
         }
 
