@@ -2495,6 +2495,7 @@ function validateAgaveToken(req, isTokenRequired) {
             res => {
                 res.setEncoding("utf8");
                 if (res.statusCode < 200 || res.statusCode > 299) {
+                    console.log("validateAgaveToken: !!!!!!! failed to get profile: ", res.statusCode);
                     reject(new Error('Failed to load page, status code: ' + res.statusCode));
                 }
 
