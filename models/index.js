@@ -2,7 +2,7 @@
 
 var fs        = require("fs");
 var path      = require("path");
-var sequelize = require('../../config/mysql').sequelize;
+var sequelize = require('../config/mysql').sequelize;
 
 /**
  * Import database model files

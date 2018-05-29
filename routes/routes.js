@@ -11,7 +11,7 @@ const requestp    = require('request-promise');
 const querystring = require('querystring');
 const mongo       = require('../config/mongo').mongo;
 const sequelize   = require('../config/mysql').sequelize;
-const models      = require('./models/index');
+const models      = require('../models/index');
 
 // Load config file
 const config = require('../config.json');

@@ -10,7 +10,7 @@ var config = require('./config.json');
 // Spawn workers and start server
 var workers = process.env.WORKERS || require('os').cpus().length;
 var app = express();
-require('./api/routes.js')(app);
+require('./routes/routes.js')(app);
 
 if (cluster.isMaster) {
     console.log('Start cluster with %s workers', workers);
