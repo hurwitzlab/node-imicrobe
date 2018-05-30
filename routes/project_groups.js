@@ -20,7 +20,7 @@ router.get('/project_groups', function(req, res, next) {
                 , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.user
-                , attributes: [ 'user_id', 'user_name' ]
+                , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
                 , through: { attributes: [] } // remove connector table from output
                 }
             ]
@@ -35,6 +35,10 @@ router.get('/project_groups/:id(\\d+)', function(req, res, next) {
             include: [
                 { model: models.project
                 , attributes: [ 'project_id', 'project_name' ]
+                , through: { attributes: [] } // remove connector table from output
+                },
+                { model: models.user
+                , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
                 , through: { attributes: [] } // remove connector table from output
                 }
             ]
