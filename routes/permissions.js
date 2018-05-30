@@ -120,6 +120,12 @@ module.exports = function(sequelize) {
                 if (!project)
                     throw(errors.ERR_NOT_FOUND);
 
+                if (!project.private)
+                    return PERMISSION_READ_ONLY;
+
+                if (!user || !user.user_id)
+                    throw(errors.ERR_PERMISSION_DENIED);
+
                 var userPerm =
                     project.users &&
                         project.users
@@ -133,8 +139,7 @@ module.exports = function(sequelize) {
                         .filter(u => u.user_id == user.user_id)
                         .reduce((acc, u) => Math.min(u.get().permission, acc), self.PERMISSION_READ_ONLY);
 
-                console.log("user permission:", userPerm);
-                console.log("group permission:", groupPerm);
+                console.log("checkProjectPermissions: user permission =", userPerm, "group permission =", groupPerm);
                 if (!userPerm && !groupPerm)
                     throw(errors.ERR_PERMISSION_DENIED);
 
