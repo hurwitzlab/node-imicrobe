@@ -82,7 +82,7 @@ module.exports = function(app) {
             )
             .then( () =>
                 logAdd(req, {
-                    title: "Setting orcid " + orcid,
+                    title: "Updated orcid " + orcid,
                     type: "setOrcid",
                     orcid: orcid
                 })
@@ -109,7 +109,7 @@ module.exports = function(app) {
         var message = req.body.message || "";
 
         logAdd(req, {
-            title: "Send support email",
+            title: "Sent support email",
             type: "contact"
         })
         .then( () => {

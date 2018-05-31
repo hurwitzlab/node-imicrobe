@@ -220,7 +220,7 @@ router.put('/samples', function(req, res, next) {
         )
         .then( sample =>
             logAdd(req, {
-                title: "Add sample '" + sample_name + "'",
+                title: "Added sample '" + sample_name + "'",
                 type: "addSample",
                 sample_id: sample.sample_id
             })
@@ -271,7 +271,7 @@ router.post('/samples/:sample_id(\\d+)', function (req, res, next) {
             })
             .then( sample =>
                 logAdd(req, {
-                    title: "Update sample '" + sample.sample_name + "'",
+                    title: "Updated sample '" + sample.sample_name + "'",
                     type: "updateSample",
                     sample_id: sample.sample_id
                 })
@@ -297,7 +297,7 @@ router.delete('/samples/:sample_id(\\d+)', function (req, res, next) {
         )
         .then( sample =>
             logAdd(req, {
-                title: "Remove sample '" + sample.sample_name + "'",
+                title: "Removed sample '" + sample.sample_name + "'",
                 type: "removeSample",
                 sample_id: sample.sample_id
             })
@@ -344,7 +344,7 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
         permissions.checkSamplePermissions(sample_id, req.auth.user)
         .then( () =>
             logAdd(req, {
-                title: "Add sample attribute " + attr_type + " = " + attr_value,
+                title: "Added sample attribute " + attr_type + " = " + attr_value,
                 type: "addSampleAttribute",
                 sample_id: req.params.sample_id,
                 attr_type: req.body.attr_type,
@@ -434,7 +434,7 @@ router.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(req,
         permissions.checkSamplePermissions(sample_id, req.auth.user)
         .then( () =>
             logAdd(req, {
-                title: "Update sample attribute " + attr_type + " = " + attr_value,
+                title: "Updated sample attribute " + attr_type + " = " + attr_value,
                 type: "updateSampleAttribute",
                 sample_id: req.params.sample_id,
                 attr_type: req.body.attr_type,
@@ -536,7 +536,7 @@ router.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (r
         // Remove from Mongo DB using type name
         .then( sample_attr =>
             logAdd(req, {
-                title: "Remove sample attribute '" + sample_attr.sample_attr_type.type + "'",
+                title: "Removed sample attribute '" + sample_attr.sample_attr_type.type + "'",
                 type: "removeSampleAttribute",
                 sample_id: req.params.sample_id,
                 attr_id: req.body.attr_id
@@ -625,7 +625,7 @@ router.put('/samples/:sample_id/files', function(req, res, next) {
         )
         .then( sample =>
             logAdd(req, {
-                title: "Add " + files.length + " files to sample '" + sample.sample_name + "'",
+                title: "Added " + files.length + " files to sample '" + sample.sample_name + "'",
                 type: "addSampleFiles",
                 sample_id: sample.sample_id,
                 files: files
@@ -683,7 +683,7 @@ router.post('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function(req, res,
         )
         .then( sample =>
             logAdd(req, {
-                title: "Update file " + sample_file_id + " for sample '" + sample.sample_name + "'",
+                title: "Updated file " + sample_file_id + " for sample '" + sample.sample_name + "'",
                 type: "updateSampleFile",
                 sample_id: sample_id,
                 sample_file_id: sample_file_id,
@@ -714,7 +714,7 @@ router.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (req, r
         )
         .then( sample =>
             logAdd(req, {
-                title: "Remove file " + req.params.file_id + " from sample '" + sample.sample_name + "'",
+                title: "Removed file " + req.params.file_id + " from sample '" + sample.sample_name + "'",
                 type: "removeSampleFile",
                 sample_id: req.params.sample_id,
                 sample_file_id: req.params.file_id

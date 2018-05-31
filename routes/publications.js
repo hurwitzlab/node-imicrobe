@@ -66,7 +66,7 @@ router.put('/publications', function(req, res, next) { //FIXME change route to b
             models.project.findOne({ where: { project_id: projectId } })
             .then( project =>
                 logAdd(req, {
-                    title: "Add publication '" + publication.get().title + "' to project '" + project.project_name + "'",
+                    title: "Added publication '" + publication.get().title + "' to project '" + project.project_name + "'",
                     type: "addPublication",
                     project_id: projectId,
                     publication_id: publication.get().publication_id
@@ -86,7 +86,7 @@ router.post('/publications/:publication_id(\\d+)', function (req, res, next) { /
             permissions.requireProjectEditPermission(publication.project_id, req.auth.user)
             .then( () =>
                 logAdd(req, {
-                    title: "Update publication '" + publication.title + "'",
+                    title: "Updated publication '" + publication.title + "'",
                     type: "updatePublication",
                     publication_id: req.params.publication_id
                 })
@@ -120,7 +120,7 @@ router.delete('/publications/:publication_id(\\d+)', function (req, res, next) {
             permissions.requireProjectEditPermission(publication.project_id, req.auth.user)
             .then( () =>
                 logAdd(req, {
-                    title: "Remove publication '" + publication.title + "'",
+                    title: "Removed publication '" + publication.title + "'",
                     type: "removePublication",
                     publication_id: req.params.publication_id
                 })

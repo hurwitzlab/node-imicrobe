@@ -183,7 +183,7 @@ router.put('/projects', function(req, res, next) {
         })
         .then( project =>
             logAdd(req, {
-                title: "Add project '" + project_name + "'",
+                title: "Added project '" + project_name + "'",
                 type: "addProject",
                 project_id: project.get().project_id
             })
@@ -208,7 +208,7 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
         permissions.requireProjectEditPermission(project_id, req.auth.user)
         .then( () =>
             logAdd(req, {
-                title: "Update project '" + project_name + "'",
+                title: "Updated project '" + project_name + "'",
                 type: "updateProject",
                 project_id: project_id
             })
@@ -285,7 +285,7 @@ router.delete('/projects/:project_id(\\d+)', function (req, res, next) {
         )
         .then( project =>
             logAdd(req, {
-                title: "Remove project '" + project.project_name + "'",
+                title: "Removed project '" + project.project_name + "'",
                 type: "removeProject",
                 project_id: project.project_id
             })
@@ -333,7 +333,7 @@ router.put('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)', f
         )
         .then( results =>
             logAdd(req, {
-                title: "Add investigator " + results[1].investigator_name + " to project '" + results[0].project_name + "'",
+                title: "Added investigator " + results[1].investigator_name + " to project '" + results[0].project_name + "'",
                 type: "addInvestigatorToProject",
                 project_id: req.params.project_id,
                 investigator_id: req.params.investigator_id
@@ -376,7 +376,7 @@ router.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)'
         )
         .then( results =>
             logAdd(req, {
-                title: "Remove investigator " + results[1].investigator_name + " from project '" + results[0].project_name + "'",
+                title: "Removed investigator " + results[1].investigator_name + " from project '" + results[0].project_name + "'",
                 type: "removeInvestigatorFromProject",
                 project_id: req.params.project_id,
                 investigator_id: req.params.investigator_id
@@ -411,7 +411,7 @@ router.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, re
         )
         .then( results =>
             logAdd(req, {
-                title: "Add user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") to project '" + results[0].project_name + "'",
+                title: "Added user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") to project '" + results[0].project_name + "'",
                 type: "addUserToProject",
                 project_id: req.params.project_id,
                 target_user_id: req.params.user_id,
@@ -468,7 +468,7 @@ router.delete('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req,
         )
         .then( results =>
             logAdd(req, {
-                title: "Remove user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") from project '" + results[0].project_name + "'",
+                title: "Removed user " + (results[1].first_name + " " + results[1].last_name) + " (" + results[1].user_name + ") from project '" + results[0].project_name + "'",
                 type: "removeUserFromProject",
                 project_id: req.params.project_id,
                 target_user_id: req.params.user_id

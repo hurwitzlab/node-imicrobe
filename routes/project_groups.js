@@ -73,7 +73,7 @@ router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)',
         )
         .then( results =>
             logAdd(req, {
-                title: "Add project '" + results[0].project_name + "' to group '" + results[1].group_name + "'",
+                title: "Added project '" + results[0].project_name + "' to group '" + results[1].group_name + "'",
                 type: "addProjectToProjectGroup",
                 project_id: req.params.project_id,
                 project_group_id: req.params.project_group_id
@@ -136,7 +136,7 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
         )
         .then( results =>
             logAdd(req, {
-                title: "Remove project '" + results[0].project_name + "' from group '" + results[1].group_name + "'",
+                title: "Removed project '" + results[0].project_name + "' from group '" + results[1].group_name + "'",
                 type: "removeProjectFromProjectGroup",
                 project_id: req.params.project_id,
                 project_group_id: req.params.project_group_id

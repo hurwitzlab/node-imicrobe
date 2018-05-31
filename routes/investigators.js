@@ -49,7 +49,7 @@ router.put('/investigators', function(req, res, next) {
         })
         .then( () =>
             logAdd(req, {
-                title: "Add investigator " + name,
+                title: "Added investigator " + name,
                 type: "addInvestigator",
                 name: name,
                 institution: institution

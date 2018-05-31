@@ -87,7 +87,7 @@ router.post('/apps/runs', function(req, res, next) {
         )
         .then( app =>
             logAdd(req, {
-                title: "Run app " + app.app_name,
+                title: "Ran app " + app.app_name,
                 type: "runApp",
                 app_id: app_id,
                 app_name: app.app_name
