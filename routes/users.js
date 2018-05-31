@@ -9,6 +9,7 @@ const toJsonOrError = require('./utils').toJsonOrError;
 const requireAuth = require('./utils').requireAuth;
 const errorOnNull = require('./utils').errorOnNull;
 const logAdd = require('./utils').logAdd;
+const permissions = require('./permissions')(sequelize);
 
 router.get('/users', function(req, res, next) {
     requireAuth(req);
@@ -56,6 +57,18 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                               attributes: [ "project_id", "project_name" ]
                             }
                           ]
+                        },
+                        { model: models.user,
+                          attributes:
+                            [ "user_id", "user_name", "first_name", "last_name",
+                                [ sequelize.literal(
+                                    '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
+                                        'FROM project_to_user WHERE project_to_user.user_id = `projects->users`.`user_id` AND project_to_user.project_id = `projects`.`project_id`)'
+                                  ),
+                                  'permission'
+                                ]
+                            ],
+                          through: { attributes: [] } // remove connector table from output
                         }
                       ]
                     }
