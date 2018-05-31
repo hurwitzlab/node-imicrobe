@@ -35,23 +35,25 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                 where: { user_id: req.params.id },
                 include: [
                     { model: models.project,
+                      attributes: [ "project_id", "project_name", "project_code", "project_type", "url" ],
                       through: { attributes: [] }, // remove connector table from output
                       include: [
                         { model: models.investigator,
+                          attributes: [ 'investigator_id', 'investigator_name', 'institution' ],
                           through: { attributes: [] } // remove connector table from output
                         },
                         { model: models.publication },
                         { model: models.sample,
                           attributes: [
-                            "sample_id",
-                            "sample_name",
-                            "sample_acc",
-                            "sample_type",
+                            "sample_id", "sample_name", "sample_acc", "sample_type",
                             [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = `projects->samples`.`sample_id`)'), 'sample_file_count' ]
                           ],
                           include: [
-                            { model: models.sample_file },
-                            { model: models.project
+                            { model: models.sample_file,
+                              attributes: [ "sample_file_id", "sample_id", "file" ]
+                            },
+                            { model: models.project,
+                              attributes: [ "project_id", "project_name" ]
                             }
                           ]
                         }
@@ -59,11 +61,13 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                     }
                 ]
             }),
+
             mongo()
             .then( db => {
                 return new Promise(function (resolve, reject) {
                     db.collection('log').find(
-                        { user_id: req.params.id*1 } // ensure integer value
+                        { user_id: req.params.id*1 }, // ensure integer value
+                        { _id: 1, date: 1, title: 1, url: 1 }
                     )
                     .sort({ date: 1 })
                     .toArray( (err, items) => {
