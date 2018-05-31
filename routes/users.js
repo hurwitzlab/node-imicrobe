@@ -76,6 +76,8 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
         ])
         .then( results => {
             var user = results[0];
+            if (!user)
+                throw(errors.ERR_NOT_FOUND);
             user.dataValues.log = results[1];
             return user;
         })
