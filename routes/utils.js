@@ -23,7 +23,7 @@ function errorOnNull() {
 }
 
 function requireAuth(req) {
-    if (!req || !req.auth || !req.auth.validToken && !req.auth.user)
+    if (!req || !req.auth || !req.auth.validToken || !req.auth.user)
         throw(errors.ERR_UNAUTHORIZED);
 }
 
