@@ -644,7 +644,9 @@ router.put('/samples/:sample_id/files', function(req, res, next) {
                 )
             )
         )
-        .then( permissions.updateSampleFilePermissions(req.params.sample_id, req.headers.authorization, files) )
+        .then( () =>
+            permissions.updateSampleFilePermissions(req.params.sample_id, req.headers.authorization, files)
+        )
         .then( () =>
             models.sample.findOne({
                 where: { sample_id: req.params.sample_id },

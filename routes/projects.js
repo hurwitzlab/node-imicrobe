@@ -433,7 +433,9 @@ router.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, re
                 permission: permissions.PERMISSION_CODES[req.body.permission]
             })
         )
-        .then( permissions.updateProjectFilePermissions(req.params.project_id, req.params.user_id, req.headers.authorization, req.body.permission) )
+        .then( () =>
+            permissions.updateProjectFilePermissions(req.params.project_id, req.params.user_id, req.headers.authorization, req.body.permission)
+        )
         .then( () =>
             models.project.findOne({
                 where: { project_id: req.params.project_id },
