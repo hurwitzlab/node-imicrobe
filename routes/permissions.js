@@ -1,3 +1,4 @@
+const sequelize = require('../config/mysql').sequelize;
 const models = require('../models');
 const errors = require('./errors');
 const Promise = require('promise');
@@ -59,15 +60,15 @@ module.exports = function(sequelize) {
               'permission'
             ],
 
-        PROJECT_PERMISSION_CLAUSE: function(user) {
-            return {
-                $or: [
-                    { private: { $or: [0, null] } },
-                    (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {}),
-                    //(user && user.user_name ? sequelize.literal("`project_groups->users`.`user_id` = '" + user.user_id + "'") : {}) // not working
-                ]
-            };
-        },
+//        PROJECT_PERMISSION_CLAUSE: function(user) {
+//            return {
+//                $or: [
+//                    { private: { $or: [0, null] } },
+//                    (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {}),
+//                    //(user && user.user_name ? sequelize.literal("`project_groups->users`.`user_id` = '" + user.user_id + "'") : {}) // not working
+//                ]
+//            };
+//        },
 
         // Permission codes -- in order of decreasing access rights
         PERMISSION_OWNER: PERMISSION_OWNER,
@@ -82,96 +83,16 @@ module.exports = function(sequelize) {
             "none": PERMISSION_NONE
         },
 
-        checkProjectPermissions: function(projectId, user) {
-            var self = this;
+        checkProjectPermissions: checkProjectPermissions,
 
-            return models.project.findOne({
-                where: { project_id: projectId },
-                include: [
-                    { model: models.project_group
-                    , attributes: [ 'project_group_id', 'group_name' ]
-                    , through: { attributes: [] } // remove connector table from output
-                    , include: [
-                        { model: models.user
-                        , attributes: [ 'user_id', 'user_name',
-                            [ sequelize.literal(
-                                '(SELECT permission FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
-                              ),
-                              'permission'
-                            ]
-                          ]
-                        , through: { attributes: [] } // remove connector table from output
-                        }
-                      ]
-                    },
-                    { model: models.user
-                    , attributes: [ 'user_id', 'user_name',
-                        [ sequelize.literal(
-                            '(SELECT permission FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
-                          ),
-                          'permission'
-                        ]
-                      ]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                ]
-            })
-            .then( project => {
-                if (!project)
-                    throw(errors.ERR_NOT_FOUND);
-
-                if (!project.private)
-                    return PERMISSION_READ_ONLY;
-
-                if (!user || !user.user_id)
-                    throw(errors.ERR_PERMISSION_DENIED);
-
-                var userPerm =
-                    project.users &&
-                        project.users
-                        .filter(u => u.user_id == user.user_id)
-                        .reduce((acc, u) => Math.min(u.get().permission, acc), self.PERMISSION_READ_ONLY);
-
-                var groupPerm =
-                    project.project_groups &&
-                        project.project_groups
-                        .reduce((acc, g) => acc.concat(g.users), [])
-                        .filter(u => u.user_id == user.user_id)
-                        .reduce((acc, u) => Math.min(u.get().permission, acc), self.PERMISSION_READ_ONLY);
-
-                console.log("checkProjectPermissions: user permission =", userPerm, "group permission =", groupPerm);
-                if (!userPerm && !groupPerm)
-                    throw(errors.ERR_PERMISSION_DENIED);
-
-                return Math.min(userPerm, groupPerm);
-            });
-        },
-
-        checkSamplePermissions: function(sampleId, user) {
-            var self = this;
-
-            return models.sample.findOne({
-                where: { sample_id: sampleId }
-            })
-            .then( sample => {
-                if (!sample)
-                    throw(errors.ERR_NOT_FOUND);
-
-                return self.checkProjectPermissions(sample.project_id, user);
-            });
-        },
+        checkSamplePermissions: checkSamplePermissions,
 
         requireProjectEditPermission: function(projectId, user) {
-            var self = this;
+            return requireProjectPermission(projectId, user, PERMISSION_READ_WRITE);
+        },
 
-            return self.checkProjectPermissions(projectId, user)
-                .then( permission => {
-                    if (permission >= self.PERMISSION_READ_ONLY)
-                        throw(errors.ERR_PERMISSION_DENIED);
-
-                    console.log("User " + user.user_name + "/" + user.user_id + " has edit access");
-                    return permission;
-                });
+        requireProjectOwnerPermission: function(projectId, user) {
+            return requireProjectPermission(projectId, user, PERMISSION_OWNER);
         },
 
         updateProjectFilePermissions: function(project_id, user_id, token, permission, files) {
@@ -267,6 +188,91 @@ module.exports = function(sequelize) {
 
 function getKeyByValue(object, value) {
     return Object.keys(object).find(key => object[key] === value);
+}
+
+function checkProjectPermissions(projectId, user) {
+    return models.project.findOne({
+        where: { project_id: projectId },
+        include: [
+            { model: models.project_group
+            , attributes: [ 'project_group_id', 'group_name' ]
+            , through: { attributes: [] } // remove connector table from output
+            , include: [
+                { model: models.user
+                , attributes: [ 'user_id', 'user_name',
+                    [ sequelize.literal(
+                        '(SELECT permission FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+                      ),
+                      'permission'
+                    ]
+                  ]
+                , through: { attributes: [] } // remove connector table from output
+                }
+              ]
+            },
+            { model: models.user
+            , attributes: [ 'user_id', 'user_name',
+                [ sequelize.literal(
+                    '(SELECT permission FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
+                  ),
+                  'permission'
+                ]
+              ]
+            , through: { attributes: [] } // remove connector table from output
+            }
+        ]
+    })
+    .then( project => {
+        if (!project)
+            throw(errors.ERR_NOT_FOUND);
+
+        if (!project.private)
+            return PERMISSION_READ_ONLY;
+
+        if (!user || !user.user_id)
+            throw(errors.ERR_PERMISSION_DENIED);
+
+        var userPerm =
+            project.users &&
+                project.users
+                .filter(u => u.user_id == user.user_id)
+                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
+
+        var groupPerm =
+            project.project_groups &&
+                project.project_groups
+                .reduce((acc, g) => acc.concat(g.users), [])
+                .filter(u => u.user_id == user.user_id)
+                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
+
+        console.log("checkProjectPermissions: user permission =", userPerm, "group permission =", groupPerm);
+        if (!userPerm && !groupPerm)
+            throw(errors.ERR_PERMISSION_DENIED);
+
+        return Math.min(userPerm, groupPerm);
+    });
+}
+
+function checkSamplePermissions(sampleId, user) {
+    return models.sample.findOne({
+        where: { sample_id: sampleId }
+    })
+    .then( sample => {
+        if (!sample)
+            throw(errors.ERR_NOT_FOUND);
+
+        return checkProjectPermissions(sample.project_id, user);
+    });
+}
+
+function requireProjectPermission(projectId, user, requiredPermission) {
+    return checkProjectPermissions(projectId, user)
+        .then( permission => {
+            if (permission > requiredPermission)
+                throw(errors.ERR_PERMISSION_DENIED);
+
+            return permission;
+        });
 }
 
 function agaveUpdateFilePermissions(username, token, permission, files) {

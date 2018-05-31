@@ -274,7 +274,7 @@ router.delete('/projects/:project_id(\\d+)', function (req, res, next) {
     requireAuth(req);
 
     toJsonOrError(res, next,
-        permissions.requireProjectEditPermission(req.params.project_id, req.auth.user)
+        permissions.requireProjectOwnerPermission(req.params.project_id, req.auth.user)
         .then( () =>
             models.project.findOne({
                 where: { project_id: req.params.project_id },

@@ -292,7 +292,7 @@ router.delete('/samples/:sample_id(\\d+)', function (req, res, next) {
             })
         )
         .then( sample =>
-            permissions.requireProjectEditPermission(sample.project_id, req.auth.user)
+            permissions.requireProjectOwnerPermission(sample.project_id, req.auth.user)
             .then( () => sample )
         )
         .then( sample =>
