@@ -5,9 +5,7 @@ const cors        = require('cors');
 const Promise     = require('promise');
 const bodyParser  = require('body-parser');
 const sendmail    = require('sendmail')();
-const https       = require("https");
 const requestp    = require('request-promise');
-//const querystring = require('querystring');
 const sequelize   = require('../config/mysql').sequelize;
 const models      = require('../models/index');
 
@@ -167,89 +165,64 @@ function errorHandler(error, req, res, next) {
 }
 
 function agaveTokenValidator(req, res, next) {
-    req.auth = {
-        profile: {},
-        user: {}
-    };
+    var token;
+    if (req && req.headers)
+        token = req.headers.authorization;
+    console.log("validateAgaveToken: token:", token);
 
-    validateAgaveToken(req, false)
-    .then( profile => {
-        req.auth.validToken = true;
-        req.auth.profile = profile;
-        if (profile) {
-            return models.user.findOne({
-                where: {
-                    user_name: profile.username
-                }
-            })
-            .then( user => {
-                user.dataValues.first_name = profile.first_name;
-                user.dataValues.last_name = profile.last_name;
-                return user;
-            });
-        }
-
-        return null;
-    })
-    .then( user => {
-        if (user)
-            req.auth.user = user;
-    })
-    .finally(next);
-}
-
-function validateAgaveToken(req, isTokenRequired) {
-    isTokenRequired = typeof isTokenRequired === 'undefined' ? true : isTokenRequired;
-
-    return new Promise((resolve, reject) => {
-        var token;
-        if (req && req.headers)
-            token = req.headers.authorization;
-
-        if (!token) {
-            if (isTokenRequired) {
-                console.log('Error: Authorization token missing: headers = ', req.headers);
-                reject(new Error('Authorization token missing'));
+    if (!token)
+        next();
+    else {
+        getAgaveProfile(token)
+        .then(function (response) {
+            if (!response || response.status != "success") {
+                console.log('!!!! Bad profile status: ' + response.status);
+                return;
             }
             else {
-                resolve();
+                console.log("validateAgaveToken: *** success ***");
+                response.result.token = token;
+                return response.result;
             }
-        }
-        console.log("validateAgaveToken: token:", token);
+        })
+        .then( profile => {
+            if (profile) {
+                req.auth = {
+                    validToken: true,
+                    profile: profile
+                };
 
-        const profilereq = https.request(
-            {   method: 'GET',
-                host: 'agave.iplantc.org',
-                port: 443,
-                path: '/profiles/v2/me',
-                headers: {
-                    Authorization: token
-                }
-            },
-            res => {
-                res.setEncoding("utf8");
-                if (res.statusCode < 200 || res.statusCode > 299) {
-                    console.log("validateAgaveToken: !!!!!!! failed to get profile: ", res.statusCode);
-                    reject(new Error('Failed to load page, status code: ' + res.statusCode));
-                }
-
-                var body = [];
-                res.on('data', (chunk) => body.push(chunk));
-                res.on('end', () => {
-                    body = body.join('');
-                    var data = JSON.parse(body);
-                    if (!data || data.status != "success")
-                        reject(new Error('Status ' + data.status));
-                    else {
-                        console.log("validateAgaveToken: *** success ***");
-                        data.result.token = token;
-                        resolve(data.result);
+                return models.user.findOne({
+                    where: {
+                        user_name: profile.username
                     }
+                })
+                .then( user => {
+                    user.dataValues.first_name = profile.first_name;
+                    user.dataValues.last_name = profile.last_name;
+                    return user;
                 });
             }
-        );
-        profilereq.on('error', (err) => reject(err));
-        profilereq.end();
+
+            return;
+        })
+        .then( user => {
+            if (user)
+                req.auth.user = user;
+        })
+        .finally(next);
+    }
+}
+
+function getAgaveProfile(token) {
+    return requestp({
+        method: "GET",
+        uri: "https://agave.iplantc.org/profiles/v2/me", // FIXME hardcoded
+        headers: {
+            Authorization: token,
+            Accept: "application/json"
+        },
+        json: true
     });
 }
 
