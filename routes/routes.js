@@ -170,6 +170,10 @@ function agaveTokenValidator(req, res, next) {
         token = req.headers.authorization;
     console.log("validateAgaveToken: token:", token);
 
+    req.auth = {
+        validToken: false
+    };
+
     if (!token)
         next();
     else {
