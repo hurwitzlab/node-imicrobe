@@ -95,6 +95,14 @@ module.exports = function(sequelize) {
             return requireProjectPermission(projectId, user, PERMISSION_OWNER);
         },
 
+        requireProjectGroupEditPermission: function(projectGroupId, user) {
+            return requireProjectGroupPermission(projectGroupId, user, PERMISSION_READ_WRITE);
+        },
+
+        requireProjectGroupOwnerPermission: function(projectGroupId, user) {
+            return requireProjectGroupPermission(projectGroupId, user, PERMISSION_OWNER);
+        },
+
         updateProjectFilePermissions: function(project_id, user_id, token, permission, files) {
             console.log("updateProjectFilePermissions", project_id, user_id, permission)
             return models.project.findOne({
@@ -265,8 +273,37 @@ function checkSamplePermissions(sampleId, user) {
     });
 }
 
+function checkProjectGroupPermissions(projectGroupId, user) {
+    return models.project_group.findOne({
+        where: { project_group_id: projectGroupId },
+        include: [
+            { model: models.user
+            , where: { user_id: user.user_id }
+            , attributes: [ 'user_id' ]
+            , through: { attributes: [ 'permission' ] }
+            }
+        ]
+    })
+    .then( project_group => {
+        if (!project_group)
+            throw(errors.ERR_PERMISSION_DENIED);
+
+        return project_group.users[0].project_group_to_user.permission;
+    });
+}
+
 function requireProjectPermission(projectId, user, requiredPermission) {
     return checkProjectPermissions(projectId, user)
+        .then( permission => {
+            if (permission > requiredPermission)
+                throw(errors.ERR_PERMISSION_DENIED);
+
+            return permission;
+        });
+}
+
+function requireProjectGroupPermission(projectGroupId, user, requiredPermission) {
+    return checkProjectGroupPermissions(projectGroupId, user)
         .then( permission => {
             if (permission > requiredPermission)
                 throw(errors.ERR_PERMISSION_DENIED);

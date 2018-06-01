@@ -25,24 +25,35 @@ router.get('/project_groups', function(req, res, next) {
                 }
             ]
         })
+        .then( groups => { // filter on permission
+            return groups.filter(group => {
+                var hasAccess =
+                    req.auth.user && req.auth.user.user_name &&
+                    group.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                return !group.private || hasAccess;
+            })
+        })
     );
 })
 
 router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
-        models.project_group.findOne({
-            where: { project_group_id: req.params.id },
-            include: [
-                { model: models.project
-                , attributes: [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.user
-                , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
-                , through: { attributes: [] } // remove connector table from output
-                }
-            ]
-        })
+        permission.requireProjectGroupEditPermission(req.params.id, req.auth.user)
+        .then( () =>
+            models.project_group.findOne({
+                where: { project_group_id: req.params.id },
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table from output
+                    },
+                    { model: models.user
+                    , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
+                    , through: { attributes: [] } // remove connector table from output
+                    }
+                ]
+            })
+        )
     );
 });
 
@@ -51,7 +62,10 @@ router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)',
     requireAuth(req);
 
     toJsonOrError(res, next,
-        permissions.requireProjectEditPermission(req.params.project_id, req.auth.user)
+        Promise.all([
+            permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
+            permissions.requireProjectGroupEditPermission(req.params.project_group_id, req.auth.user)
+        ])
         .then( () =>
             models.project_to_project_group.findOrCreate({
                 where: {
@@ -122,7 +136,10 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
     requireAuth(req);
 
     toJsonOrError(res, next,
-        permissions.requireProjectEditPermission(req.params.project_id, req.auth.user)
+        Promise.all([
+            permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
+            permission.requireProjectGroupOwnerPermission(req.params.project_group_id, req.auth.user)
+        ])
         // Get project and group for logging
         .then( () =>
             Promise.all([
