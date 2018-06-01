@@ -38,7 +38,7 @@ router.get('/project_groups', function(req, res, next) {
 
 router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
-        permission.requireProjectGroupEditPermission(req.params.id, req.auth.user)
+        permissions.requireProjectGroupEditPermission(req.params.id, req.auth.user)
         .then( () =>
             models.project_group.findOne({
                 where: { project_group_id: req.params.id },
@@ -138,7 +138,7 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
     toJsonOrError(res, next,
         Promise.all([
             permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
-            permission.requireProjectGroupOwnerPermission(req.params.project_group_id, req.auth.user)
+            permissions.requireProjectGroupEditPermission(req.params.project_group_id, req.auth.user)
         ])
         // Get project and group for logging
         .then( () =>
