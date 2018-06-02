@@ -38,7 +38,7 @@ router.get('/project_groups', function(req, res, next) {
 
 router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
-        permissions.requireProjectGroupEditPermission(req.params.id, req.auth.user)
+        permissions.checkProjectGroupPermissions(req.params.id, req.auth.user)
         .then( () =>
             models.project_group.findOne({
                 where: { project_group_id: req.params.id },

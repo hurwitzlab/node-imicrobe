@@ -85,6 +85,8 @@ module.exports = function(sequelize) {
 
         checkProjectPermissions: checkProjectPermissions,
 
+        checkProjectGroupPermissions: checkProjectGroupPermissions,
+
         checkSamplePermissions: checkSamplePermissions,
 
         requireProjectEditPermission: function(projectId, user) {
@@ -278,17 +280,37 @@ function checkProjectGroupPermissions(projectGroupId, user) {
         where: { project_group_id: projectGroupId },
         include: [
             { model: models.user
-            , where: { user_id: user.user_id }
             , attributes: [ 'user_id' ]
             , through: { attributes: [ 'permission' ] }
             }
         ]
     })
-    .then( project_group => {
-        if (!project_group)
+    .then( group => {
+        if (!group)
+            throw(errors.ERR_NOT_FOUND);
+
+        // Return user permission if shared
+        var hasUser =
+            user && user.user_id &&
+                group.users &&
+                group.users
+                .map(u => u.user_id)
+                .includes(user.user_id);
+
+        if (hasUser) {
+            var perm =
+                group.users
+                .filter(u => u.user_id == user.user_id)
+                .map(u => u.project_group_to_user.permission)
+                .pop();
+            return perm;
+        }
+
+        // Group is private and not shared with user
+        if (group.private)
             throw(errors.ERR_PERMISSION_DENIED);
 
-        return project_group.users[0].project_group_to_user.permission;
+        return PERMISSION_READ_ONLY; // Group is public and not shared with user
     });
 }
 
