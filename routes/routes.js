@@ -184,13 +184,14 @@ function agaveTokenValidator(req, res, next) {
                 return;
             }
             else {
-                console.log("validateAgaveToken: *** success ***");
                 response.result.token = token;
                 return response.result;
             }
         })
         .then( profile => {
             if (profile) {
+                console.log("validateAgaveToken: *** success ***  username:", profile.username);
+
                 req.auth = {
                     validToken: true,
                     profile: profile
