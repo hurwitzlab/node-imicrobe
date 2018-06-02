@@ -14,12 +14,10 @@ const permissions = require('./permissions')(sequelize);
 router.get('/projects/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
         permissions.checkProjectPermissions(req.params.id, req.auth.user)
-        .then( () => {
-            return Promise.all([
+        .then( () =>
+            Promise.all([
                 models.project.findOne({
-                    where: {
-                        project_id: req.params.id
-                    },
+                    where: { project_id: req.params.id },
                     include: [
                         { model: models.investigator
                         , attributes: [ 'investigator_id', 'investigator_name' ]
@@ -37,10 +35,17 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                         , include: [ models.sample_file ]
                         },
                         { model: models.project_group
-                        , attributes: [ 'project_group_id', 'group_name',
+                        , attributes: [
+                            'project_group_id', 'group_name',
                             [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user WHERE `project_groups`.`project_group_id` = project_group_id)'), 'user_count' ]
                           ]
                         , through: { attributes: [] } // remove connector table from output
+                        , include: [
+                            { model: models.user
+                            , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR2 ]
+                            , through: { attributes: [] } // remove connector table from output
+                            }
+                          ]
                         },
                         { model: models.user
                         , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_PERMISSION_ATTR ]
@@ -67,12 +72,9 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                     where: { project_id: req.params.id },
                 })
             ])
-        })
+        )
         .then( results => {
             var project = results[0];
-            if (!project)
-                throw(errors.ERR_NOT_FOUND);
-
             project.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
             project.dataValues.available_domains = results[2];
             project.dataValues.available_groups = results[3];
