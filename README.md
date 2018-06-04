@@ -18,6 +18,6 @@ nodemon server.js
 For production:
 ```
 sudo npm install pm2@latest -g
-pm2 start server.js
+pm2 start --name node-imicrobe server.js
 sudo pm2 startup systemd
 ```
