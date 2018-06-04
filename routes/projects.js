@@ -122,11 +122,9 @@ router.get('/projects', function(req, res, next) {
         })
         .then( projects => { // filter on permission
             return projects.filter(project => {
-                var hasUserAccess = project.users.map(u => u.user_name).includes(req.auth.user.user_name);
-                var hasGroupAccess = project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
-                return !project.private
-                    || (req.auth.user && req.auth.user.user_name
-                        && (hasUserAccess || hasGroupAccess));
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                return !project.private || hasUserAccess || hasGroupAccess;
             })
         })
     );

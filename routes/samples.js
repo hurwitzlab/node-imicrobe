@@ -191,11 +191,9 @@ router.get('/samples', function(req, res, next) {
         models.sample.findAll(params)
         .then(samples => { // filter by permission -- workaround for broken clause above
             return samples.filter(sample => {
-                var hasUserAccess = sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
-                var hasGroupAccess = sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
-                return !sample.project.private
-                    || (req.auth.user && req.auth.user.user_name
-                        && (hasUserAccess || hasGroupAccess));
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                return !sample.project.private || hasUserAccess || hasGroupAccess;
             })
         })
     );
