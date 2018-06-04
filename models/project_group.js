@@ -19,6 +19,11 @@ module.exports = function(sequelize, DataTypes) {
     url: {
       type: DataTypes.STRING(255),
       allowNull: true
+    },
+    private: {
+      type: DataTypes.INTEGER(1),
+      allowNull: false,
+      defaultValue: '0'
     }
   }, {
     tableName: 'project_group'
