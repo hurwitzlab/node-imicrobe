@@ -180,7 +180,7 @@ function agaveTokenValidator(req, res, next) {
         getAgaveProfile(token)
         .then(function (response) {
             if (!response || response.status != "success") {
-                console.log('!!!! Bad profile status: ' + response.status);
+                console.log('validateAgaveToken: !!!! Bad profile status: ' + response.status);
                 return;
             }
             else {
@@ -214,6 +214,9 @@ function agaveTokenValidator(req, res, next) {
         .then( user => {
             if (user)
                 req.auth.user = user;
+        })
+        .catch( error => {
+            console.log("validateAgaveToken: !!!!", error.message);
         })
         .finally(next);
     }
