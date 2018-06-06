@@ -209,26 +209,14 @@ function checkProjectPermissions(projectId, user) {
             , through: { attributes: [] } // remove connector table from output
             , include: [
                 { model: models.user
-                , attributes: [ 'user_id', 'user_name',
-                    [ sequelize.literal(
-                        '(SELECT permission FROM project_group_to_user AS pgtou WHERE pgtou.user_id = users.user_id AND pgtou.project_group_id = project_group_id)'
-                      ),
-                      'permission'
-                    ]
-                  ]
-                , through: { attributes: [] } // remove connector table from output
+                , attributes: [ 'user_id', 'user_name' ]
+                , through: { attributes: [ 'permission' ] }
                 }
               ]
             },
             { model: models.user
-            , attributes: [ 'user_id', 'user_name',
-                [ sequelize.literal(
-                    '(SELECT permission FROM project_to_user AS ptou WHERE ptou.user_id = users.user_id AND ptou.project_id = project.project_id)'
-                  ),
-                  'permission'
-                ]
-              ]
-            , through: { attributes: [] } // remove connector table from output
+            , attributes: [ 'user_id', 'user_name' ]
+            , through: { attributes: [ 'permission' ] }
             }
         ]
     })
@@ -246,14 +234,14 @@ function checkProjectPermissions(projectId, user) {
             project.users &&
                 project.users
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(u.get().project_to_user.permission, acc), PERMISSION_READ_ONLY);
 
         var groupPerm =
             project.project_groups &&
                 project.project_groups
                 .reduce((acc, g) => acc.concat(g.users), [])
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.get().permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(u.get().project_group_to_user.permission, acc), PERMISSION_READ_ONLY);
 
         console.log("checkProjectPermissions: user permission =", userPerm, "group permission =", groupPerm);
         if (!userPerm && !groupPerm)
