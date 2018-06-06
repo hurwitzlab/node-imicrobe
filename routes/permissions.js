@@ -39,7 +39,7 @@ module.exports = function(sequelize) {
         PROJECT_GROUP_PERMISSION_ATTR: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
             [ sequelize.literal(
                 '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project->project_groups->users`.`user_id` AND pgtou.project_group_id = project_groups.project_group_id)'
+                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project->project_groups->users`.`user_id` AND pgtou.project_group_id = `project->project_groups`.`project_group_id`)'
               ),
               'permission'
             ],
