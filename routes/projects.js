@@ -37,7 +37,7 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                         { model: models.project_group
                         , attributes: [
                             'project_group_id', 'group_name',
-                            [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user WHERE `project_groups`.`project_group_id` = project_group_id)'), 'user_count' ]
+                            [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user AS pgtou WHERE pgtou.project_group_id = project_group_id)'), 'user_count' ]
                           ]
                         , through: { attributes: [] } // remove connector table from output
                         , include: [
@@ -395,6 +395,8 @@ router.delete('/projects/:project_id(\\d+)/investigators/:investigator_id(\\d+)'
 
 router.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, res, next) {
     requireAuth(req);
+
+    errorOnNull(req.body.permission);
 
     toJsonOrError(res, next,
         permissions.requireProjectEditPermission(req.params.project_id, req.auth.user)

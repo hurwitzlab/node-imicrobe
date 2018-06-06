@@ -31,7 +31,7 @@ module.exports = function(sequelize) {
         SAMPLE_PERMISSION_ATTR: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
             [ sequelize.literal(
                 '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_to_user WHERE project_to_user.user_id = `project->users`.`user_id` AND project_to_user.project_id = project.project_id)'
+                    'FROM project_to_user AS ptou WHERE ptou.user_id = `project->users`.`user_id` AND ptou.project_id = project.project_id)'
               ),
               'permission'
             ],
@@ -39,7 +39,7 @@ module.exports = function(sequelize) {
         PROJECT_GROUP_PERMISSION_ATTR: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
             [ sequelize.literal(
                 '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user WHERE project_group_to_user.user_id = `project->project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project->project_groups->users`.`user_id` AND pgtou.project_group_id = project_groups.project_group_id)'
               ),
               'permission'
             ],
@@ -47,7 +47,7 @@ module.exports = function(sequelize) {
         PROJECT_GROUP_PERMISSION_ATTR2: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
             [ sequelize.literal(
                 '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project_groups->users`.`user_id` AND pgtou.project_group_id = project_groups.project_group_id)'
               ),
               'permission'
             ],
@@ -55,7 +55,7 @@ module.exports = function(sequelize) {
         PROJECT_GROUP_PERMISSION_ATTR3: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
             [ sequelize.literal(
                 '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user WHERE project_group_to_user.user_id = users.user_id AND project_group_to_user.project_group_id = project_group_id)'
+                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = users.user_id AND pgtou.project_group_id = project_group.project_group_id)'
               ),
               'permission'
             ],
@@ -211,7 +211,7 @@ function checkProjectPermissions(projectId, user) {
                 { model: models.user
                 , attributes: [ 'user_id', 'user_name',
                     [ sequelize.literal(
-                        '(SELECT permission FROM project_group_to_user WHERE project_group_to_user.user_id = `project_groups->users`.`user_id` AND project_group_to_user.project_group_id = project_group_id)'
+                        '(SELECT permission FROM project_group_to_user AS pgtou WHERE pgtou.user_id = users.user_id AND pgtou.project_group_id = project_group_id)'
                       ),
                       'permission'
                     ]
@@ -223,7 +223,7 @@ function checkProjectPermissions(projectId, user) {
             { model: models.user
             , attributes: [ 'user_id', 'user_name',
                 [ sequelize.literal(
-                    '(SELECT permission FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
+                    '(SELECT permission FROM project_to_user AS ptou WHERE ptou.user_id = users.user_id AND ptou.project_id = project.project_id)'
                   ),
                   'permission'
                 ]
