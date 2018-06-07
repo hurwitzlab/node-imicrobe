@@ -17,71 +17,23 @@ const AGAVE_PERMISSION_CODES = {
     "NONE": PERMISSION_NONE
 };
 
+const PERMISSION_CODES = {
+    "owner": PERMISSION_OWNER,
+    "read-write": PERMISSION_READ_WRITE,
+    "read-only": PERMISSION_READ_ONLY,
+    "none": PERMISSION_NONE,
+    "": PERMISSION_NONE
+};
+
 module.exports = function(sequelize) {
     return {
-        // Reusable sub-queries
-        PROJECT_PERMISSION_ATTR: // Convert "permission" field to a string
-            [ sequelize.literal(
-                '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_to_user WHERE project_to_user.user_id = users.user_id AND project_to_user.project_id = project.project_id)'
-              ),
-              'permission'
-            ],
-
-        SAMPLE_PERMISSION_ATTR: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
-            [ sequelize.literal(
-                '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_to_user AS ptou WHERE ptou.user_id = `project->users`.`user_id` AND ptou.project_id = project.project_id)'
-              ),
-              'permission'
-            ],
-
-        PROJECT_GROUP_PERMISSION_ATTR: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
-            [ sequelize.literal(
-                '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project->project_groups->users`.`user_id` AND pgtou.project_group_id = `project->project_groups`.`project_group_id`)'
-              ),
-              'permission'
-            ],
-
-        PROJECT_GROUP_PERMISSION_ATTR2: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
-            [ sequelize.literal(
-                '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = `project_groups->users`.`user_id` AND pgtou.project_group_id = project_groups.project_group_id)'
-              ),
-              'permission'
-            ],
-
-        PROJECT_GROUP_PERMISSION_ATTR3: // FIXME can this be combined with PROJECT_PERMISSION_ATTR?
-            [ sequelize.literal(
-                '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                    'FROM project_group_to_user AS pgtou WHERE pgtou.user_id = users.user_id AND pgtou.project_group_id = project_group.project_group_id)'
-              ),
-              'permission'
-            ],
-
-//        PROJECT_PERMISSION_CLAUSE: function(user) {
-//            return {
-//                $or: [
-//                    { private: { $or: [0, null] } },
-//                    (user && user.user_name ? sequelize.literal("users.user_name = '" + user.user_name + "'") : {}),
-//                    //(user && user.user_name ? sequelize.literal("`project_groups->users`.`user_id` = '" + user.user_id + "'") : {}) // not working
-//                ]
-//            };
-//        },
-
         // Permission codes -- in order of decreasing access rights
         PERMISSION_OWNER: PERMISSION_OWNER,
         PERMISSION_READ_WRITE: PERMISSION_READ_WRITE,
         PERMISSION_READ_ONLY: PERMISSION_READ_ONLY,
         PERMISSION_NONE: PERMISSION_NONE,
 
-        PERMISSION_CODES: {
-            "owner": PERMISSION_OWNER,
-            "read-write": PERMISSION_READ_WRITE,
-            "read-only": PERMISSION_READ_ONLY,
-            "none": PERMISSION_NONE
-        },
+        PERMISSION_CODES: PERMISSION_CODES,
 
         checkProjectPermissions: checkProjectPermissions,
 
@@ -172,7 +124,7 @@ module.exports = function(sequelize) {
                 if (!files) // use all sample files if none given
                     files = sample.sample_files.map(f => f.file);
 
-                // Merge users from direct sharing and through groups, preventing duplicates
+                // Merge users from direct sharing and through groups, preventing duplicates //TODO move into function
                 var users = sample.project.users;
                 var seen = users.reduce((map, user) => { map[user.user_id] = 1; return map; }, {});
                 var allUsers = sample.project.project_groups
@@ -181,7 +133,8 @@ module.exports = function(sequelize) {
                         if (!seen[u.user_id])
                             acc.push(u);
                         return acc;
-                    }, []).concat(users);
+                    }, [])
+                    .concat(users);
 
                 return Promise.all(
                     allUsers
@@ -201,24 +154,8 @@ function getKeyByValue(object, value) {
 }
 
 function checkProjectPermissions(projectId, user) {
-    return models.project.findOne({
-        where: { project_id: projectId },
-        include: [
-            { model: models.project_group
-            , attributes: [ 'project_group_id', 'group_name' ]
-            , through: { attributes: [] } // remove connector table from output
-            , include: [
-                { model: models.user
-                , attributes: [ 'user_id', 'user_name' ]
-                , through: { attributes: [ 'permission' ] }
-                }
-              ]
-            },
-            { model: models.user
-            , attributes: [ 'user_id', 'user_name' ]
-            , through: { attributes: [ 'permission' ] }
-            }
-        ]
+    return models.project.scope('withUsers', 'withGroups').findOne({
+        where: { project_id: projectId }
     })
     .then( project => {
         if (!project)
@@ -234,17 +171,17 @@ function checkProjectPermissions(projectId, user) {
             project.users &&
                 project.users
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.get().project_to_user.permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(PERMISSION_CODES[u.project_to_user.permission], acc), PERMISSION_NONE);
 
         var groupPerm =
             project.project_groups &&
                 project.project_groups
                 .reduce((acc, g) => acc.concat(g.users), [])
                 .filter(u => u.user_id == user.user_id)
-                .reduce((acc, u) => Math.min(u.get().project_group_to_user.permission, acc), PERMISSION_READ_ONLY);
+                .reduce((acc, u) => Math.min(PERMISSION_CODES[u.project_group_to_user.permission], acc), PERMISSION_NONE);
 
         console.log("checkProjectPermissions: user permission =", userPerm, "group permission =", groupPerm);
-        if (!userPerm && !groupPerm)
+        if (userPerm == PERMISSION_NONE && groupPerm == PERMISSION_NONE)
             throw(errors.ERR_PERMISSION_DENIED);
 
         return Math.min(userPerm, groupPerm);
@@ -289,7 +226,7 @@ function checkProjectGroupPermissions(projectGroupId, user) {
             var perm =
                 group.users
                 .filter(u => u.user_id == user.user_id)
-                .map(u => u.project_group_to_user.permission)
+                .map(u => PERMISSION_CODES[u.project_group_to_user.permission])
                 .pop();
             return perm;
         }

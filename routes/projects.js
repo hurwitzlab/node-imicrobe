@@ -16,7 +16,7 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
         permissions.checkProjectPermissions(req.params.id, req.auth.user)
         .then( () =>
             Promise.all([
-                models.project.findOne({
+                models.project.scope('withUsers', 'withGroups').findOne({
                     where: { project_id: req.params.id },
                     include: [
                         { model: models.investigator
@@ -33,23 +33,6 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                         { model: models.sample
                         , attributes: ['sample_id', 'sample_name', 'sample_type' ]
                         , include: [ models.sample_file ]
-                        },
-                        { model: models.project_group
-                        , attributes: [
-                            'project_group_id', 'group_name',
-                            [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user AS pgtou WHERE pgtou.project_group_id = project_groups.project_group_id)'), 'user_count' ]
-                          ]
-                        , through: { attributes: [] } // remove connector table from output
-                        , include: [
-                            { model: models.user
-                            , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR2 ]
-                            , through: { attributes: [] } // remove connector table from output
-                            }
-                          ]
-                        },
-                        { model: models.user
-                        , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_PERMISSION_ATTR ]
-                        , through: { attributes: [] } // remove connector table from output
                         }
                     ]
                 }),
@@ -86,34 +69,28 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
 });
 
 router.get('/projects', function(req, res, next) {
+    var whereClause = {
+            $or: {
+                project_name: { $like: "%"+req.query.term+"%" },
+                project_id: { $like: "%"+req.query.term+"%" }
+            }
+        }
+
     toJsonOrError(res, next,
-        models.project.findAll({
+        models.project.scope('withUsers', 'withGroups').findAll({
             //where: PROJECT_PERMISSION_CLAUSE(req.auth.user), // replaced by manual filter below to get project_group access working
+            where: (req.query.term ? whereClause : {}),
             include: [
                 { model: models.investigator
                 , attributes: ['investigator_id', 'investigator_name']
                 , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.domain
-                , attributes: ['domain_id', 'domain_name']
+                , attributes: [ 'domain_id', 'domain_name']
                 , through: { attributes: [] } // remove connector table from output
                 },
                 { model: models.publication
-                , attributes: ['publication_id', 'title']
-                },
-                { model: models.user
-                , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_PERMISSION_ATTR ]
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.project_group
-                , attributes: ['project_group_id', 'group_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                , include: [
-                    { model: models.user
-                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR2 ]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                  ]
+                , attributes: [ 'publication_id', 'title']
                 }
             ],
             attributes: {
@@ -122,8 +99,8 @@ router.get('/projects', function(req, res, next) {
         })
         .then( projects => { // filter on permission
             return projects.filter(project => {
-                var hasUserAccess = req.auth.user && req.auth.user.user_name && project.users.map(u => u.user_name).includes(req.auth.user.user_name);
-                var hasGroupAccess = req.auth.user && req.auth.user.user_name && project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && project.users && project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && project.project_groups && project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
                 return !project.private || hasUserAccess || hasGroupAccess;
             })
         })
@@ -439,14 +416,8 @@ router.put('/projects/:project_id(\\d+)/users/:user_id(\\d+)', function (req, re
             permissions.updateProjectFilePermissions(req.params.project_id, req.params.user_id, req.headers.authorization, req.body.permission)
         )
         .then( () =>
-            models.project.findOne({
-                where: { project_id: req.params.project_id },
-                include: [
-                    { model: models.user
-                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_PERMISSION_ATTR]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                ]
+            models.project.scope('withUsers').findOne({
+                where: { project_id: req.params.project_id }
             })
         )
     );

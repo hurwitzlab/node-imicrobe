@@ -12,16 +12,12 @@ const permissions = require('./permissions')(sequelize);
 
 router.get('/project_groups', function(req, res, next) {
     toJsonOrError(res, next,
-        models.project_group.findAll({
+        models.project_group.scope('withUsers').findAll({
             where: (req.query.term ? { group_name: { $like: "%"+req.query.term+"%" } } : {}),
             include: [
                 { model: models.project
                 , attributes: [ 'project_id', 'project_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.user
-                , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
-                , through: { attributes: [] } // remove connector table from output
+                , through: { attributes: [] } // remove connector table
                 }
             ]
         })
@@ -40,16 +36,12 @@ router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
         permissions.checkProjectGroupPermissions(req.params.id, req.auth.user)
         .then( () =>
-            models.project_group.findOne({
+            models.project_group.scope('withUsers').findOne({
                 where: { project_group_id: req.params.id },
                 include: [
                     { model: models.project
                     , attributes: [ 'project_id', 'project_name' ]
-                    , through: { attributes: [] } // remove connector table from output
-                    },
-                    { model: models.user
-                    , attributes: [ 'user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
-                    , through: { attributes: [] } // remove connector table from output
+                    , through: { attributes: [] } // remove connector table
                     }
                 ]
             })
@@ -94,39 +86,28 @@ router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)',
             })
         )
         .then( () =>
-            models.project_group.findOne({
-                where: { project_group_id: req.params.project_group_id },
-                include: [
-                    { model: models.user
-                    , attributes: [ 'user_id', 'user_name', permissions.PROJECT_GROUP_PERMISSION_ATTR3 ]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                ]
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: req.params.project_group_id }
             })
         )
         .then( project_group =>
             Promise.all(
                 project_group.users
                 .map( user => {
-                    return permissions.updateProjectFilePermissions(req.params.project_id, user.user_id, req.headers.authorization, user.get().permission)
+                    return permissions.updateProjectFilePermissions(req.params.project_id, user.user_id, req.headers.authorization, user.get().project_group_to_user.permission)
                 })
             )
         )
         .then( () =>
-            models.project.findOne({
-                where: { project_id: req.params.project_id },
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: req.params.project_group_id },
                 include: [
-                    { model: models.project_group
-                    , attributes: [ 'project_group_id', 'group_name',
-                        [ sequelize.literal('(SELECT COUNT(*) FROM project_group_to_user AS pgtou WHERE pgtou.project_group_id = project_group.project_group_id)'), 'user_count' ]
-                      ]
-                    , through: { attributes: [] } // remove connector table from output
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table
                     }
                 ]
             })
-        )
-        .then( project =>
-            project.project_groups
         )
     );
 });
@@ -137,12 +118,15 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
 
     toJsonOrError(res, next,
         Promise.all([
-            permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
-            permissions.requireProjectGroupEditPermission(req.params.project_group_id, req.auth.user)
+            permissions.checkProjectPermissions(req.params.project_id, req.auth.user),
+            permissions.checkProjectGroupPermissions(req.params.project_group_id, req.auth.user)
         ])
         // Get project and group for logging
-        .then( () =>
-            Promise.all([
+        .then( results => {
+            if (results[0] >= permissions.PERMISSION_READ_ONLY && results[1] >= permissions.PERMISSION_READ_ONLY)
+                throw(errors.ERR_PERMISSION_DENIED);
+
+            return Promise.all([
                 models.project.findOne({
                     where: { project_id: req.params.project_id }
                 }),
@@ -150,7 +134,7 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
                     where: { project_group_id: req.params.project_group_id }
                 })
             ])
-        )
+        })
         .then( results =>
             logAdd(req, {
                 title: "Removed project '" + results[0].project_name + "' from group '" + results[1].group_name + "'",
@@ -167,9 +151,17 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
                 }
             })
         )
-        .then( () => {
-            return "success";
-        })
+        .then( () =>
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: req.params.project_group_id },
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table
+                    }
+                ]
+            })
+        )
     );
 });
 
@@ -179,13 +171,24 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
 
     errorOnNull(req.body.permission);
 
+    var projectGroupId = req.params.project_group_id;
+
     toJsonOrError(res, next,
-        permissions.requireProjectGroupEditPermission(req.params.project_group_id, req.auth.user)
+        permissions.requireProjectGroupEditPermission(projectGroupId, req.auth.user)
+        .then( () =>
+            models.project_group_to_user.destroy({ // First remove all existing connections
+                where: {
+                    project_group_id: projectGroupId,
+                    user_id: req.params.user_id
+                }
+            })
+        )
         .then( () =>
             models.project_group_to_user.findOrCreate({
                 where: {
-                    project_group_id: req.params.project_group_id,
-                    user_id: req.params.user_id
+                    project_group_id: projectGroupId,
+                    user_id: req.params.user_id,
+                    permission: permissions.PERMISSION_CODES[req.body.permission]
                 }
             })
         )
@@ -196,7 +199,7 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
                     where: { user_id: req.params.user_id }
                 }),
                 models.project_group.findOne({
-                    where: { project_group_id: req.params.project_group_id }
+                    where: { project_group_id: projectGroupId }
                 })
             ])
         )
@@ -205,16 +208,16 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
                 title: "Added user '" + results[0].user_name + "' to group '" + results[1].group_name + "'",
                 type: "addUserToProjectGroup",
                 target_user_id: req.params.user_id,
-                project_group_id: req.params.project_group_id
+                project_group_id: projectGroupId
             })
         )
         .then( () =>
             models.project_group.findOne({
-                where: { project_group_id: req.params.project_group_id },
+                where: { project_group_id: projectGroupId },
                 include: [
                     { model: models.project
                     , attributes: [ 'project_id', 'project_name' ]
-                    , through: { attributes: [] } // remove connector table from output
+                    , through: { attributes: [] } // remove connector table
                     }
                 ]
             })
@@ -228,18 +231,12 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
             )
         )
         .then( () =>
-            models.project_group.findOne({
-                where: { project_group_id: req.params.project_group_id },
-                include: [
-                    { model: models.user
-                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_PERMISSION_ATTR]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                ]
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: projectGroupId }
             })
         )
-        .then( project =>
-            project.project_groups
+        .then( project_group =>
+            project_group.users
         )
     );
 });
@@ -248,41 +245,47 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
 router.delete('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', function(req, res, next) {
     requireAuth(req);
 
+    var projectGroupId = req.params.project_group_id;
+
     toJsonOrError(res, next,
         Promise.all([
-            permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
-            permissions.requireProjectGroupEditPermission(req.params.project_group_id, req.auth.user)
+            permissions.requireProjectGroupEditPermission(projectGroupId, req.auth.user)
         ])
-        // Get project and group for logging
+        // Get user and group for logging
         .then( () =>
             Promise.all([
-                models.project.findOne({
-                    where: { project_id: req.params.project_id }
+                models.user.findOne({
+                    where: { user_id: req.params.user_id }
                 }),
                 models.project_group.findOne({
-                    where: { project_group_id: req.params.project_group_id }
+                    where: { project_group_id: projectGroupId }
                 })
             ])
         )
         .then( results =>
             logAdd(req, {
-                title: "Removed project '" + results[0].project_name + "' from group '" + results[1].group_name + "'",
-                type: "removeProjectFromProjectGroup",
-                project_id: req.params.project_id,
-                project_group_id: req.params.project_group_id
+                title: "Remove user '" + results[0].user_name + "' to group '" + results[1].group_name + "'",
+                type: "removeUserFromProjectGroup",
+                target_user_id: req.params.user_id,
+                project_group_id: projectGroupId
             })
         )
         .then( () =>
-            models.project_to_project_group.destroy({
+            models.project_group_to_user.destroy({
                 where: {
-                    project_group_id: req.params.project_group_id,
-                    project_id: req.params.project_id
+                    project_group_id: projectGroupId,
+                    user_id: req.params.user_id
                 }
             })
         )
-        .then( () => {
-            return "success";
-        })
+        .then( () =>
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: projectGroupId }
+            })
+        )
+        .then( project_group =>
+            project_group.users
+        )
     );
 });
 

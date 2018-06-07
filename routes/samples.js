@@ -40,24 +40,7 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                 models.sample.findOne({
                     where: { sample_id: req.params.id },
                     include: [
-                        { model: models.project
-                        , include: [
-                                { model: models.user
-                                , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.SAMPLE_PERMISSION_ATTR]
-                                , through: { attributes: [] } // remove connector table from output
-                                },
-                                { model: models.project_group
-                                , attributes: [ 'project_group_id', 'group_name' ]
-                                , through: { attributes: [] } // remove connector table from output
-                                , include: [
-                                    { model: models.user
-                                    , attributes: ['user_id', 'user_name', permissions.PROJECT_GROUP_PERMISSION_ATTR ]
-                                    , through: { attributes: [] } // remove connector table from output
-                                    }
-                                  ]
-                                }
-                            ]
-                        },
+                        { model: models.project.scope('withUsers', 'withGroups') },
                         { model: models.investigator
                         , through: { attributes: [] } // remove connector table from output
                         },
@@ -159,25 +142,9 @@ router.get('/samples', function(req, res, next) {
             , [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
             ],
         include: [
-            { model: models.project
+            { model: models.project.scope('withUsers', 'withGroups')
             , attributes: [ 'project_id', 'project_name', 'private' ]
             //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see manual filter step below
-            , include: [
-                { model: models.user
-                , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.SAMPLE_PERMISSION_ATTR]
-                , through: { attributes: [] } // remove connector table from output
-                },
-                { model: models.project_group
-                , attributes: ['project_group_id', 'group_name' ]
-                , through: { attributes: [] } // remove connector table from output
-                , include: [
-                    { model: models.user
-                    , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.PROJECT_GROUP_PERMISSION_ATTR ]
-                    , through: { attributes: [] } // remove connector table from output
-                    }
-                  ]
-                }
-              ]
             }
         ]
     };
@@ -191,8 +158,8 @@ router.get('/samples', function(req, res, next) {
         models.sample.findAll(params)
         .then(samples => { // filter by permission -- workaround for broken clause above
             return samples.filter(sample => {
-                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
-                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
                 return !sample.project.private || hasUserAccess || hasGroupAccess;
             })
         })
@@ -758,21 +725,28 @@ router.post('/samples/search', jsonParser, function (req, res, next) {
         return models.sample.findAll({
             where: { sample_id: { $in: sampleIds } },
             include: [
-                { model: models.project
+                { model: models.project.scope('withUsers', 'withGroups')
                 //, attributes: [ 'project_id', 'project_name' ]
-                , include: [
-                        { model: models.user
-                        , attributes: ['user_id', 'user_name', 'first_name', 'last_name', permissions.SAMPLE_PERMISSION_ATTR]
-                        , through: { attributes: [] } // remove connector table from output
-                        }
-                    ]
                 }
             ]
         })
         .then( samples => {
             samples.forEach(s => {
-                if (s.project.users)
-                    samplesById[s.sample_id].users = s.project.users;
+                // Merge users from direct sharing and through groups, preventing duplicates //TODO move into function
+                var users = s.project.users;
+                var seen = users.reduce((map, user) => { map[user.user_id] = 1; return map; }, {});
+                var allUsers = s.project.project_groups
+                    .reduce((acc, g) => acc.concat(g.users), [])
+                    .reduce((acc, u) => {
+                        if (!seen[u.user_id]) {
+                            u.dataValues.project_to_user = { permission: u.project_group_to_user.permission }; // FIXME kludge
+                            acc.push(u);
+                        }
+                        return acc;
+                    }, [])
+                    .concat(users);
+
+                samplesById[s.sample_id].users = allUsers;
             });
 
             return Object.values(samplesById);

@@ -28,7 +28,14 @@ module.exports = function(sequelize, DataTypes) {
     },
     permission: {
       type: DataTypes.INTEGER(4),
-      allowNull: true
+      allowNull: true,
+      get() { //FIXME in common with project_group_to_user.js
+        const permission = this.getDataValue('permission');
+        if (permission == 1) return "owner";
+        if (permission == 2) return "read-write";
+        if (permission == 3) return "read-only";
+        return "none";
+      }
     }
   }, {
     tableName: 'project_to_user'

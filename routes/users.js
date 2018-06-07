@@ -35,7 +35,7 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
             models.user.findOne({
                 where: { user_id: req.params.id },
                 include: [
-                    { model: models.project,
+                    { model: models.project.scope('withUsers'),
                       attributes: [ "project_id", "project_name", "project_code", "project_type", "url" ],
                       through: { attributes: [] }, // remove connector table from output
                       include: [
@@ -58,18 +58,6 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                             }
                           ]
                         },
-                        { model: models.user,
-                          attributes:
-                            [ "user_id", "user_name", "first_name", "last_name",
-                                [ sequelize.literal(
-                                    '(SELECT CASE WHEN permission=1 THEN "owner" WHEN permission=2 THEN "read-write" WHEN permission=3 THEN "read-only" WHEN permission IS NULL THEN "read-only" END ' +
-                                        'FROM project_to_user WHERE project_to_user.user_id = `projects->users`.`user_id` AND project_to_user.project_id = `projects`.`project_id`)'
-                                  ),
-                                  'permission'
-                                ]
-                            ],
-                          through: { attributes: [] } // remove connector table from output
-                        }
                       ]
                     }
                 ]
