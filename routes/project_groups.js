@@ -49,6 +49,73 @@ router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     );
 });
 
+router.post('/project_groups/:id(\\d+)', function (req, res, next) {
+    requireAuth(req);
+
+    var project_group_id = req.params.id;
+    var group_name = req.body.group_name;
+    var group_description = req.body.group_description;
+    var group_url = req.body.group_url;
+
+    toJsonOrError(res, next,
+        permissions.requireProjectGroupEditPermission(project_group_id, req.auth.user)
+        .then( () =>
+            logAdd(req, {
+                title: "Updated project group '" + group_name + "'",
+                type: "updateProjectGroup",
+                project_group_id: project_group_id
+            })
+        )
+        .then( () =>
+            models.project_group.update(
+                { group_name: group_name,
+                  description: group_description,
+                  url: group_url
+                },
+                { where: { project_group_id: project_group_id } }
+            )
+        )
+        .then( () =>
+            models.project_group.scope('withUsers').findOne({
+                where: { project_group_id: project_group_id },
+                include: [
+                    { model: models.project
+                    , attributes: [ 'project_id', 'project_name' ]
+                    , through: { attributes: [] } // remove connector table
+                    }
+                ]
+            })
+        )
+    );
+});
+
+router.delete('/project_groups/:id(\\d+)', function (req, res, next) {
+    requireAuth(req);
+
+    toJsonOrError(res, next,
+        permissions.requireProjectGroupOwnerPermission(req.params.id, req.auth.user)
+        .then( () =>
+            models.project_group.findOne({
+                where: { project_group_id: req.params.id }
+            })
+        )
+        .then( group =>
+            logAdd(req, {
+                title: "Removed project group '" + group.group_name + "'",
+                type: "removeProjectGroup",
+                project_group_id: group.project_group_id
+            })
+        )
+        .then( () =>
+            models.project_group.destroy({
+                where: {
+                    project_group_id: req.params.id
+                }
+            })
+        )
+    );
+});
+
 // Add a Project to a Project Group (and share with the group's user list)
 router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
     requireAuth(req);
