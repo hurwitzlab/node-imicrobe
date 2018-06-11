@@ -49,6 +49,35 @@ router.get('/project_groups/:id(\\d+)', function(req, res, next) {
     );
 });
 
+router.put('/project_groups', function(req, res, next) {
+    var group_name = req.body.group_name;
+
+    errorOnNull(group_name);
+
+    requireAuth(req);
+
+    toJsonOrError(res, next,
+        models.project_group.create({
+            group_name: group_name,
+            project_group_to_users: [
+                { user_id: req.auth.user.user_id,
+                  permission: permissions.PERMISSION_OWNER
+                }
+            ]
+        },
+        { include: [ models.project_group_to_user ]
+        })
+        .then( group =>
+            logAdd(req, {
+                title: "Added project group '" + group_name + "'",
+                type: "addProjectGroup",
+                project_group_id: group.get().project_group_id
+            })
+            .then( () => group )
+        )
+    );
+});
+
 router.post('/project_groups/:id(\\d+)', function (req, res, next) {
     requireAuth(req);
 
