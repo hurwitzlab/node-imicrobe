@@ -152,7 +152,7 @@ router.put('/projects', function(req, res, next) {
             private: 1,
             project_to_users: [
                 { user_id: req.auth.user.user_id,
-                  permission: 1 //FIXME hardcoded
+                  permission: permissions.PERMISSION_OWNER
                 }
             ]
         },
