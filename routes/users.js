@@ -62,7 +62,13 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                     },
                     { model: models.project_group.scope('withUsers')
                     , attributes: [ "project_group_id", "group_name", "description", "url" ]
-                    , through: { attributes: [] }, // remove connector table from output
+                    , through: { attributes: [] } // remove connector table from output
+                    , include: [
+                        { model: models.project
+                        , attributes: [ "project_id", "project_name" ]
+                        , through: { attributes: [] } // remove connector table from output
+                        }
+                      ]
                     }
                 ]
             }),
