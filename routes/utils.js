@@ -1,6 +1,9 @@
 const mongo = require('../config/mongo').mongo;
 const errors = require('./errors');
 
+
+const EMPTY_PROMISE = new Promise((resolve) => { resolve(); });
+
 function toJsonOrError(res, next, promise) {
     promise
     .then(result => {
@@ -51,6 +54,7 @@ function logAdd(req, entry) {
         );
 }
 
+module.exports.EMPTY_PROMISE = EMPTY_PROMISE;
 module.exports.toJsonOrError = toJsonOrError;
 module.exports.errorOnNull = errorOnNull;
 module.exports.requireAuth = requireAuth;

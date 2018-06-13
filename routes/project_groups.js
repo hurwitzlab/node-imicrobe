@@ -4,6 +4,7 @@ const express = require('express');
 const router  = express.Router();
 const Promise = require('promise');
 const errors = require('./errors');
+const EMPTY_PROMISE = require('./utils').EMPTY_PROMISE;
 const toJsonOrError = require('./utils').toJsonOrError;
 const requireAuth = require('./utils').requireAuth;
 const errorOnNull = require('./utils').errorOnNull;
@@ -149,6 +150,9 @@ router.delete('/project_groups/:id(\\d+)', function (req, res, next) {
 router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)', function(req, res, next) {
     requireAuth(req);
 
+    var shareFiles = req.body.shareFiles;
+    console.log(req.body);
+
     toJsonOrError(res, next,
         Promise.all([
             permissions.requireProjectEditPermission(req.params.project_id, req.auth.user),
@@ -186,14 +190,19 @@ router.put('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+)',
                 where: { project_group_id: req.params.project_group_id }
             })
         )
-        .then( project_group =>
-            Promise.all(
-                project_group.users
-                .map( user => {
-                    return permissions.updateProjectFilePermissions(req.params.project_id, user.user_id, req.headers.authorization, user.get().project_group_to_user.permission)
-                })
-            )
-        )
+        .then( project_group => {
+            if (shareFiles) {
+                Promise.all(
+                    project_group.users
+                    .map( user => {
+                        return permissions.updateProjectFilePermissions(req.params.project_id, user.user_id, req.headers.authorization, user.get().project_group_to_user.permission)
+                    })
+                )
+            }
+            else {
+                return EMPTY_PROMISE;
+            }
+        })
         .then( () =>
             models.project_group.scope('withUsers').findOne({
                 where: { project_group_id: req.params.project_group_id },
@@ -265,9 +274,12 @@ router.delete('/project_groups/:project_group_id(\\d+)/projects/:project_id(\\d+
 router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', function(req, res, next) {
     requireAuth(req);
 
-    errorOnNull(req.body.permission);
-
     var projectGroupId = req.params.project_group_id;
+    var permission = req.body.permission;
+    var shareFiles = req.body.shareFiles;
+    console.log(req.body);
+
+    errorOnNull(permission);
 
     toJsonOrError(res, next,
         permissions.requireProjectGroupEditPermission(projectGroupId, req.auth.user)
@@ -284,7 +296,7 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
                 where: {
                     project_group_id: projectGroupId,
                     user_id: req.params.user_id,
-                    permission: permissions.PERMISSION_CODES[req.body.permission]
+                    permission: permissions.PERMISSION_CODES[permission]
                 }
             })
         )
@@ -318,14 +330,19 @@ router.put('/project_groups/:project_group_id(\\d+)/users/:user_id(\\d+)', funct
                 ]
             })
         )
-        .then( project_group =>
-            Promise.all(
-                project_group.projects
-                .map( project => {
-                    return permissions.updateProjectFilePermissions(project.project_id, req.params.user_id, req.headers.authorization, req.body.permission)
-                })
-            )
-        )
+        .then( project_group => {
+            if (shareFiles) {
+                return Promise.all(
+                    project_group.projects
+                    .map( project => {
+                        return permissions.updateProjectFilePermissions(project.project_id, req.params.user_id, req.headers.authorization, permission)
+                    })
+                )
+            }
+            else {
+                return EMPTY_PROMISE;
+            }
+        })
         .then( () =>
             models.project_group.scope('withUsers').findOne({
                 where: { project_group_id: projectGroupId }
