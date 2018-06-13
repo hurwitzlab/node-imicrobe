@@ -95,6 +95,7 @@ module.exports = function(sequelize) {
         updateSampleFilePermissions: function(sample_id, token, files) {
             var self = this;
 
+            console.log("updateSampleFilePermissions", sample_id)
             return models.sample.findOne({
                 where: { sample_id: sample_id },
                 include: [
