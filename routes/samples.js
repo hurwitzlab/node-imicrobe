@@ -89,6 +89,41 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
     );
 });
 
+router.get('/samples', function(req, res, next) {
+    var params = {
+        attributes:
+            [ 'sample_id'
+            , 'sample_name'
+            , 'sample_acc'
+            , 'sample_type'
+            , 'project_id'
+            , [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
+            ],
+        include: [
+            { model: models.project.scope('withUsers', 'withGroups')
+            , attributes: [ 'project_id', 'project_name', 'private' ]
+            //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see manual filter step below
+            }
+        ]
+    };
+
+    if (req.body.ids) {
+        var ids = req.body.ids.split(',');
+        params.where = { sample_id: { in: ids } };
+    }
+
+    toJsonOrError(res, next,
+        models.sample.findAll(params)
+        .then(samples => { // filter by permission -- workaround for broken clause above
+            return samples.filter(sample => {
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                return !sample.project.private || hasUserAccess || hasGroupAccess;
+            })
+        })
+    );
+});
+
 router.get('/samples/:id(\\d+)/proteins', function (req, res, next) {
     // TODO private samples currently do not have associated protein results, however in the future need to check pemissions
     toJsonOrError(res, next,
@@ -127,41 +162,6 @@ router.get('/samples/:id(\\d+)/centrifuge_results', function (req, res, next) {
             include: [{
                 model: models.centrifuge
             }]
-        })
-    );
-});
-
-router.get('/samples', function(req, res, next) {
-    var params = {
-        attributes:
-            [ 'sample_id'
-            , 'sample_name'
-            , 'sample_acc'
-            , 'sample_type'
-            , 'project_id'
-            , [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
-            ],
-        include: [
-            { model: models.project.scope('withUsers', 'withGroups')
-            , attributes: [ 'project_id', 'project_name', 'private' ]
-            //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see manual filter step below
-            }
-        ]
-    };
-
-    if (typeof req.query.id !== 'undefined') {
-        var ids = req.query.id.split(',');
-        params.where = { sample_id: { in: ids } };
-    }
-
-    toJsonOrError(res, next,
-        models.sample.findAll(params)
-        .then(samples => { // filter by permission -- workaround for broken clause above
-            return samples.filter(sample => {
-                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
-                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
-                return !sample.project.private || hasUserAccess || hasGroupAccess;
-            })
         })
     );
 });
@@ -561,8 +561,8 @@ router.get('/samples/files', function(req, res, next) {
         ]
     };
 
-    if (typeof req.query.id !== 'undefined') {
-        var ids = req.query.id.split(',');
+    if (req.body.ids) {
+        var ids = req.body.ids.split(',');
         params.where = { sample_id: { in: ids } };
     }
 
