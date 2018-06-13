@@ -261,7 +261,9 @@ function requireProjectGroupPermission(projectGroupId, user, requiredPermission)
 
 function agaveUpdateFilePermissions(username, token, permission, files) {
     return Promise.all(
-        files.map(f => {
+        files
+        .filter( f => !f.startsWith('/shared') ) // don't change permissions on files in the /iplant/home/shared dir
+        .map(f => {
             return agaveGetFilePermissions(username, token, f)
                 .then( curPermission => {
                     if (AGAVE_PERMISSION_CODES[curPermission] <= AGAVE_PERMISSION_CODES[permission]) {
