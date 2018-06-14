@@ -21,15 +21,19 @@ router.get('/samples/search_params', function (req, res, next) {
 });
 
 router.post('/samples/search_param_values', jsonParser, function (req, res, next) {
-  var param = req.body.param;
-  var query = req.body.query;
+    var param = req.body.param;
+    var query = req.body.query;
 
-  mongo.mongo()
+    mongo.mongo()
     .then(db =>
-      Promise.all([getSampleKeys(db, param), getMetaParamValues(db, param, query)]))
-      .then(filterMetaParamValues)
-      .then(data => res.json({[param]: data}))
-      .catch(err => res.status(500).send("Error: " + JSON.stringify(err)));
+        Promise.all([
+            getSampleKeys(db, param),
+            getMetaParamValues(db, param, query)
+        ])
+    )
+    .then(filterMetaParamValues)
+    .then(data => res.json({[param]: data}))
+    .catch(err => res.status(500).send(JSON.stringify(err)));
 });
 
 router.get('/samples/:id(\\d+)', function (req, res, next) {
@@ -353,7 +357,7 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
             .then( db => {
                 var key = "specimen__" + attr_type;
                 var obj = {};
-                obj[key] = attr_value;
+                obj[key] = isNaN(attr_value) ? ""+attr_value : 1*attr_value;
 
                 db.collection('sample').updateOne(
                     { "specimen__sample_id": 1*sample_id },
@@ -906,18 +910,18 @@ function getMetaParamValues(db, fieldName, query) {
 }
 
 function filterMetaParamValues(args) {
-  var [dataType, data] = args
+    var [dataType, data] = args
 
-  var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
-             ? Object.values(dataType)[0]
-             : undefined;
+    var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
+                 ? Object.values(dataType)[0]
+                 : undefined;
 
-  var f = function (val) { return type ? typeof(val) == type : true }
-  var sorter = type == 'number'
-    ? function (a, b) { return a - b }
-    : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
+    var f = function (val) { return type ? typeof(val) == type : true }
+    var sorter = type == 'number'
+                ? function (a, b) { return a - b }
+                : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
 
-  return Promise.resolve(data.filter(f).sort(sorter));
+    return Promise.resolve(data.filter(f).sort(sorter));
 }
 
 function fixMongoQuery(query) {

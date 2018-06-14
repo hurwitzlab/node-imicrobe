@@ -40,8 +40,6 @@ function decrementSampleKeys(sampleId) {
 }
 
 function decrementSampleKey(db, key, value) {
-    console.log("Removing sampleKey entry", key, value);
-
     return new Promise(function (resolve, reject) {
         db.collection('sampleKeys').findOne(
             { "_id": { "key": key } },
@@ -59,11 +57,11 @@ function decrementSampleKey(db, key, value) {
                         {
                             "value" : {
                                 "types" : {
-                                    "Number" : ( isNaN(value) && item.value.types.Number > 0 ? item.value.types.Number : item.value.types.Number - 1 ),
+                                    "Number" : 1*( !isNaN(value) && item.value.types.Number > 0 ? item.value.types.Number - 1 : item.value.types.Number ),
                                     "String" : ( isNaN(value) && item.value.types.String > 0 ? item.value.types.String - 1 : item.value.types.String )
                                 }
                             },
-                            "totalOccurrences" : item.totalOccurrences > 0 ? item.totalOccurrences - 1 : item.totalOccurrences,
+                            "totalOccurrences" : 1*( item.totalOccurrences > 0 ? item.totalOccurrences - 1 : item.totalOccurrences ),
                             "percentContaining" : 100 // FIXME this is wrong (but unused so no impact)
                         },
                         (err, item) => {
@@ -97,11 +95,11 @@ function incrementSampleKey(db, key, value) {
                         {
                             "value" : {
                                 "types" : {
-                                    "Number" : ( isNaN(value) ? item.value.types.Number : item.value.types.Number + 1 ),
+                                    "Number" : 1*( isNaN(value) ? item.value.types.Number : item.value.types.Number + 1 ),
                                     "String" : ( isNaN(value) ? item.value.types.String + 1 : item.value.types.String )
                                 }
                             },
-                            "totalOccurrences" : item.totalOccurrences + 1,
+                            "totalOccurrences" : 1*(item.totalOccurrences + 1),
                             "percentContaining" : 100 // FIXME this is wrong (but unused so no impact)
                         },
                         (err, item) => {
