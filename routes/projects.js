@@ -140,7 +140,7 @@ router.put('/projects', function(req, res, next) {
             project_code: "",
             pi: "",
             institution: "",
-            project_type: "<not provided>",
+            project_type: "Unspecified",
             url: "",
             read_file: "",
             meta_file: "",

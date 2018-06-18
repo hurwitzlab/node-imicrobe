@@ -184,6 +184,7 @@ router.put('/samples', function(req, res, next) {
             models.sample.create({
                 sample_name: sample_name,
                 sample_code: "__"+sample_name,
+                sample_type: "Unspecified",
                 project_id: project_id
             })
         )
