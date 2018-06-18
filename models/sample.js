@@ -42,23 +42,6 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    comments: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    },
-    taxon_id: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      defaultValue: ''
-    },
-    latitude: {
-      type: DataTypes.STRING(255),
-      allowNull: true
-    },
-    longitude: {
-      type: DataTypes.STRING(255),
-      allowNull: true
-    },
     url: {
       type: DataTypes.STRING(255),
       allowNull: false,
