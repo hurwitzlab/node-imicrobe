@@ -44,18 +44,24 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                 models.sample.findOne({
                     where: { sample_id: req.params.id },
                     include: [
-                        { model: models.project.scope('withUsers', 'withGroups') },
+                        { model: models.project.scope('withUsers', 'withGroups')
+                        , attributes: [ 'project_id', 'project_code', 'project_name', 'project_type', 'description' ]
+                        },
                         { model: models.investigator
+                        , attributes: [ 'investigator_id', 'investigator_name' ]
                         , through: { attributes: [] } // remove connector table from output
                         },
-                        { model: models.sample_file,
-                          include: [
-                            { model: models.sample_file_type }
+                        { model: models.sample_file
+                        , attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file' ]
+                        , include: [
+                            { model: models.sample_file_type
+                            , attributes: [ 'sample_file_type_id', 'type' ]
+                            }
                           ]
                         },
-                        { model: models.ontology
-                        , through: { attributes: [] } // remove connector table from output
-                        },
+//                        { model: models.ontology
+//                        , through: { attributes: [] } // remove connector table from output
+//                        },
                         { model: models.assembly },
                         { model: models.combined_assembly },
                         { model: models.sample_attr,
