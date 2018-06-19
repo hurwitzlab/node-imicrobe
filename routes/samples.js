@@ -100,15 +100,35 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
 });
 
 router.get('/samples', function(req, res, next) {
-    var params = {
-        attributes:
-            [ 'sample_id'
-            , 'sample_name'
-            , 'sample_acc'
-            , 'sample_type'
-            , 'project_id'
-            , [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
+    toJsonOrError(res, next,
+        models.sample.findAll({
+            attributes: [
+                'sample_id', 'sample_name', 'sample_acc', 'sample_type', 'project_id',
+                [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
             ],
+            include: [
+                { model: models.project.scope('withUsers', 'withGroups')
+                , attributes: [ 'project_id', 'project_name', 'private' ]
+                //, where: PROJECT_PERMISSION_CLAUSE //NOT WORKING, see manual filter step below
+                }
+            ]
+        })
+        .then(samples => { // filter by permission -- workaround for broken clause above
+            return samples.filter(sample => {
+                var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
+                var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
+                return !sample.project.private || hasUserAccess || hasGroupAccess;
+            })
+        })
+    );
+});
+
+router.post('/samples', function(req, res, next) {
+    var params = {
+        attributes: [
+            'sample_id', 'sample_name', 'sample_acc', 'sample_type', 'project_id',
+            [ sequelize.literal('(SELECT COUNT(*) FROM sample_file WHERE sample_file.sample_id = sample.sample_id)'), 'sample_file_count' ]
+        ],
         include: [
             { model: models.project.scope('withUsers', 'withGroups')
             , attributes: [ 'project_id', 'project_name', 'private' ]
@@ -555,7 +575,7 @@ router.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (r
     );
 });
 
-router.get('/samples/files', function(req, res, next) {
+router.post('/samples/files', function(req, res, next) {
     var params = {
         attributes:
             [ 'sample_file_id'
@@ -575,6 +595,7 @@ router.get('/samples/files', function(req, res, next) {
     if (req.body.ids) {
         var ids = req.body.ids.split(',');
         params.where = { sample_id: { in: ids } };
+        console.log(ids);
     }
 
     //TODO check permissions
@@ -609,15 +630,18 @@ router.put('/samples/:sample_id/files', function(req, res, next) {
         )
         .then( () =>
             Promise.all(
-                files.map( file =>
-                    models.sample_file.findOrCreate({
+                files.map( file => {
+                    if (!file.startsWith("/iplant/home"))
+                        file = "/iplant/home" + file;
+
+                    return models.sample_file.findOrCreate({
                         where: {
                             sample_id: req.params.sample_id,
                             sample_file_type_id: 1,
                             file: file
                         }
                     })
-                )
+                })
             )
         )
         .then( () =>
