@@ -357,8 +357,8 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
             })
         )
         // Create attribute and type aliases
-        .then( sample_attr_type =>
-            Promise.all(
+        .then( sample_attr_type => {
+            return Promise.all(
                 aliases.map(alias =>
                     models.sample_attr_type_alias.findOrCreate({
                         where: {
@@ -377,7 +377,7 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
                     })
                 )
             )
-        )
+        })
         // Add attribute to Mongo DB
         .then( () =>
             mongo.mongo()
