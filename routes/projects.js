@@ -91,6 +91,9 @@ router.get('/projects', function(req, res, next) {
                 },
                 { model: models.publication
                 , attributes: [ 'publication_id', 'title']
+                },
+                { model: models.sample
+                , attributes: [ 'sample_id' ]
                 }
             ],
             attributes: {
