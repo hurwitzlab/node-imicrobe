@@ -41,11 +41,6 @@ module.exports = function(sequelize, DataTypes) {
     sample_description: {
       type: DataTypes.TEXT,
       allowNull: true
-    },
-    url: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      defaultValue: ''
     }
   }, {
     tableName: 'sample'
