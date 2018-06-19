@@ -263,7 +263,7 @@ function requireProjectGroupPermission(projectGroupId, user, requiredPermission)
 function agaveUpdateFilePermissions(username, token, permission, files) {
     return Promise.all(
         files
-        .map( f => f.replace(/^\/iplant\/home/) ) // remove leading "/iplant/home"
+        .map( f => f.replace(/^\/iplant\/home/, "") ) // remove leading "/iplant/home"
         .filter( f => !f.startsWith('/shared') )  // don't change permissions on files in the /iplant/home/shared dir
         .filter( f => !f.startsWith('/scope') )   // don't change permissions on files in the /iplant/home/scope dir
         .map(f => {
