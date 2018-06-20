@@ -80,25 +80,23 @@ router.get('/projects', function(req, res, next) {
         models.project.scope('withUsers', 'withGroups').findAll({
             //where: PROJECT_PERMISSION_CLAUSE(req.auth.user), // replaced by manual filter below to get project_group access working
             where: (req.query.term ? whereClause : {}),
+            attributes: [
+                'project_id', 'project_code', 'project_type', 'project_name', 'url', 'private',
+                [ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]
+            ],
             include: [
                 { model: models.investigator
                 , attributes: ['investigator_id', 'investigator_name']
-                , through: { attributes: [] } // remove connector table from output
+                , through: { attributes: [] } // remove connector table
                 },
                 { model: models.domain
                 , attributes: [ 'domain_id', 'domain_name']
-                , through: { attributes: [] } // remove connector table from output
+                , through: { attributes: [] } // remove connector table
                 },
                 { model: models.publication
                 , attributes: [ 'publication_id', 'title']
-                },
-                { model: models.sample
-                , attributes: [ 'sample_id' ]
                 }
-            ],
-            attributes: {
-                include: [[ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = project.project_id)'), 'sample_count' ]]
-            }
+            ]
         })
         .then( projects => { // filter on permission
             return projects.filter(project => {
