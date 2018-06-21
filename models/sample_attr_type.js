@@ -8,6 +8,14 @@ module.exports = function(sequelize, DataTypes) {
       primaryKey: true,
       autoIncrement: true
     },
+    sample_attr_type_category_id: {
+      type: DataTypes.INTEGER(10).UNSIGNED,
+      allowNull: true,
+      references: {
+        model: 'sample_attr_type_category',
+        key: 'sample_attr_type_category_id'
+      }
+    },
     type: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -21,8 +29,8 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    category: {
-      type: DataTypes.STRING(100),
+    units: {
+      type: DataTypes.STRING(50),
       allowNull: true
     }
   }, {

@@ -113,6 +113,9 @@ models.sample_attr.belongsTo(models.sample_attr_type, { foreignKey: 'sample_attr
 // sample_attr_type -> sample_attr_type_alias
 models.sample_attr_type.hasMany(models.sample_attr_type_alias, { foreignKey: 'sample_attr_type_id' });
 
+// sample_attr_type -> sample_attr_type_category
+models.sample_attr_type.belongsTo(models.sample_attr_type_category, { foreignKey: 'sample_attr_type_category_id' });
+
 // sample <-> uproc pfam
 models.sample.belongsToMany(models.pfam_annotation, { through: models.uproc_pfam_result, foreignKey: 'sample_id' });
 models.uproc_pfam_result.belongsTo(models.sample, { foreignKey: 'sample_id' });

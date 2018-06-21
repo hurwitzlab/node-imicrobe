@@ -27,10 +27,6 @@ module.exports = function(sequelize, DataTypes) {
     attr_value: {
       type: DataTypes.STRING(255),
       allowNull: false
-    },
-    unit: {
-      type: DataTypes.STRING(255),
-      allowNull: true
     }
   }, {
     tableName: 'sample_attr'

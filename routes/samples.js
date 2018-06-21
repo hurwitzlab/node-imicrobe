@@ -13,28 +13,6 @@ const errorOnNull = require('./utils').errorOnNull;
 const logAdd = require('./utils').logAdd;
 const permissions = require('./permissions')(sequelize);
 
-router.get('/samples/search_params', function (req, res, next) {
-    mongo.mongo()
-    .then((db)   => getSampleKeys(db))
-    .then((data) => res.json(data))
-    .catch((err) => res.status(500).send(err));
-});
-
-router.post('/samples/search_param_values', jsonParser, function (req, res, next) {
-    var param = req.body.param;
-    var query = req.body.query;
-
-    mongo.mongo()
-    .then(db =>
-        Promise.all([
-            getSampleKeys(db, param),
-            getMetaParamValues(db, param, query)
-        ])
-    )
-    .then(filterMetaParamValues)
-    .then(data => res.json({[param]: data}))
-    .catch(err => res.status(500).send(JSON.stringify(err)));
-});
 
 router.get('/samples/:id(\\d+)', function (req, res, next) {
     toJsonOrError(res, next,
@@ -67,7 +45,10 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                         { model: models.sample_attr,
                           include: [
                               { model: models.sample_attr_type,
-                                include: [ models.sample_attr_type_alias ]
+                                include: [
+                                    models.sample_attr_type_alias,
+                                    models.sample_attr_type_category
+                                ]
                               }
                           ]
                         }
@@ -331,13 +312,14 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
     var attr_type = req.body.attr_type;
     var attr_aliases = req.body.attr_aliases;
     var attr_value = req.body.attr_value;
+    var attr_units = req.body.attr_units;
 
     errorOnNull(sample_id, attr_type, attr_value);
 
     var aliases = (attr_aliases ? attr_aliases.split(",").map(s => s.trim()) : []);
 
     toJsonOrError(res, next,
-        permissions.checkSamplePermissions(sample_id, req.auth.user)
+        permissions.checkSamplePermissions(sample_id, req.auth.user) //TODO check for edit permission
         .then( () =>
             logAdd(req, {
                 title: "Added sample attribute " + attr_type + " = " + attr_value,
@@ -353,7 +335,13 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
                 where: { type: attr_type }
             })
             .spread( (sample_attr_type, created) => {
-                return sample_attr_type;
+                if (created) // prevent overwrite of existing type's units
+                    return sample_attr_type.update(
+                        { units: attr_units },
+                        { returning: true }
+                    )
+                else
+                    return sample_attr_type;
             })
         )
         // Create attribute and type aliases
@@ -403,7 +391,10 @@ router.put('/samples/:sample_id(\\d+)/attributes', function(req, res, next) {
                     { model: models.sample_attr,
                       include: [
                           { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
+                            include: [
+                                models.sample_attr_type_alias,
+                                models.sample_attr_type_category
+                            ]
                           }
                       ]
                     }
@@ -418,74 +409,32 @@ router.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(req,
 
     var sample_id = req.params.sample_id;
     var attr_id = req.params.attr_id;
-    var attr_type = req.body.attr_type;
-    var attr_aliases = req.body.attr_aliases;
     var attr_value = req.body.attr_value;
 
-    errorOnNull(sample_id, attr_id, attr_type, attr_value);
-
-    var aliases = (attr_aliases ? attr_aliases.split(",").map(s => s.trim()) : []);
+    errorOnNull(sample_id, attr_id, attr_value);
 
     toJsonOrError(res, next,
-        permissions.checkSamplePermissions(sample_id, req.auth.user)
-        .then( () =>
-            logAdd(req, {
-                title: "Updated sample attribute " + attr_type + " = " + attr_value,
-                type: "updateSampleAttribute",
-                sample_id: req.params.sample_id,
-                attr_type: req.body.attr_type,
-                attr_value: req.body.attr_value
-            })
-        )
-        // Get attribute type
-        .then( () =>
-            models.sample_attr_type.findOne({
-                where: { type: attr_type },
-                include: [ models.sample_attr_type_alias ]
-            })
-        )
+        permissions.checkSamplePermissions(sample_id, req.auth.user) //TODO check for edit permission
         // Update attribute value
-        .then( sample_attr_type =>
+        .then( () =>
             models.sample_attr.update(
-                { sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                  attr_value: attr_value
-                },
+                { attr_value: attr_value },
                 { where: { sample_attr_id: attr_id } }
             )
-            .then( () => {
-                var currentAliases = sample_attr_type.sample_attr_type_aliases;
-                var aliasesToAdd = aliases.filter(function(s) { return currentAliases.indexOf(s) < 0; });
-                var aliasesToDelete = currentAliases.filter(function(a) { return aliases.indexOf(a.alias) < 0; });
-                console.log("delete:", aliasesToDelete)
-
-                return Promise.all(
-                    aliasesToAdd.map(alias =>
-                        models.sample_attr_type_alias.findOrCreate({
-                            where: {
-                                sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                                alias: alias
-                            }
-                        })
-                    )
-                    .concat(
-                        aliasesToDelete.map(alias =>
-                            models.sample_attr_type_alias.destroy({
-                                where: {
-                                    sample_attr_type_id: sample_attr_type.sample_attr_type_id,
-                                    alias: alias.alias
-                                }
-                            })
-                        )
-                    )
-                )
+        )
+        // Get attribute with type
+        .then( () =>
+            models.sample_attr.findOne({
+                where: { sample_attr_id: attr_id },
+                include: [ models.sample_attr_type ],
             })
         )
-        // Add to Mongo DB sample doc
-        .then( () =>
+        // Update value in Mongo DB sample doc
+        .then( sample_attr =>
             mongo.mongo()
             .then( db => {
                 var obj = {};
-                obj["specimen__"+attr_type] = attr_value;
+                obj["specimen__"+sample_attr.sample_attr_type.type] = attr_value;
 
                 db.collection('sample').updateOne(
                     { "specimen__sample_id": 1*sample_id },
@@ -493,6 +442,16 @@ router.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(req,
                 );
 
             })
+            .then( () =>
+                logAdd(req, {
+                    title: "Updated sample attribute " + sample_attr.sample_attr_type.type + " = " + attr_value,
+                    type: "updateSampleAttribute",
+                    sample_id: req.params.sample_id,
+                    attr_id: req.params.attr_id,
+                    attr_type: sample_attr.sample_attr_type.type,
+                    attr_value: req.body.attr_value
+                })
+            )
         )
         // Return sample with updated attributes
         .then( () =>
@@ -503,7 +462,10 @@ router.post('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function(req,
                     { model: models.sample_attr,
                       include: [
                           { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
+                            include: [
+                                models.sample_attr_type_alias,
+                                models.sample_attr_type_category
+                            ]
                           }
                       ]
                     }
@@ -565,7 +527,10 @@ router.delete('/samples/:sample_id(\\d+)/attributes/:attr_id(\\d+)', function (r
                     { model: models.sample_attr,
                       include: [
                           { model: models.sample_attr_type,
-                            include: [ models.sample_attr_type_alias ]
+                            include: [
+                                models.sample_attr_type_alias,
+                                models.sample_attr_type_category
+                            ]
                           }
                       ]
                     }
@@ -876,6 +841,57 @@ router.get('/samples/protein_search/:db/:query', function (req, res, next) {
     }
 });
 
+// FIXME these routes belong under /samples/attributes
+router.get('/samples/search_params', function (req, res, next) {
+    mongo.mongo()
+    .then((db)   => getSampleKeys(db))
+    .then((data) => res.json(data))
+    .catch((err) => res.status(500).send(err));
+});
+
+router.post('/samples/search_param_values', jsonParser, function (req, res, next) {
+    var param = req.body.param;
+    var query = req.body.query;
+
+    var param_type = req.body.param.replace(/^\w+__/, ""); // remove leading category prefix, e.g. "chemical__"
+
+    mongo.mongo()
+    .then(db => {
+        return Promise.all([
+            getSampleKeys(db, param),
+            getMetaParamValues(db, param, query),
+            models.sample_attr_type.findOne({
+                where: { type: param_type }
+            })
+        ])
+    })
+    .then(results => {
+        var [dataType, data, sample_attr_type] = results;
+
+        var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
+                     ? Object.values(dataType)[0]
+                     : null;
+
+        var f = function (val) { return type ? typeof(val) == type : true }
+        var sorter = type == 'number'
+                    ? function (a, b) { return a - b }
+                    : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
+
+        var units = sample_attr_type.units ? sample_attr_type.units : "";
+
+        return [data.filter(f).sort(sorter), units];
+    })
+    .then(results => {
+        var [data, units] = results;
+        res.json({
+            param: param,
+            values: data,
+            units: units
+        });
+    })
+    .catch(err => res.status(500).send(JSON.stringify(err)));
+});
+
 function getSampleKeys(db, optField) {
   /*
    * Keys look like this:
@@ -938,21 +954,6 @@ function getMetaParamValues(db, fieldName, query) {
       }
     );
   });
-}
-
-function filterMetaParamValues(args) {
-    var [dataType, data] = args
-
-    var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
-                 ? Object.values(dataType)[0]
-                 : undefined;
-
-    var f = function (val) { return type ? typeof(val) == type : true }
-    var sorter = type == 'number'
-                ? function (a, b) { return a - b }
-                : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
-
-    return Promise.resolve(data.filter(f).sort(sorter));
 }
 
 function fixMongoQuery(query) {
