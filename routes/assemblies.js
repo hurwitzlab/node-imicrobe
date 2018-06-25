@@ -24,6 +24,9 @@ router.get('/assemblies/:id(\\d+)', function(req, res, next) {
             include: [
                 { model: models.project
                 , attributes : [ 'project_id', 'project_name' ]
+                },
+                { model: models.sample
+                , attributes : [ 'sample_id', 'sample_name' ]
                 }
             ]
         })
