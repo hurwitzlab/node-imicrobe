@@ -855,41 +855,42 @@ router.post('/samples/search_param_values', jsonParser, function (req, res, next
 
     var param_type = req.body.param.replace(/^\w+__/, ""); // remove leading category prefix, e.g. "chemical__"
 
-    mongo.mongo()
-    .then(db => {
-        return Promise.all([
-            getSampleKeys(db, param),
-            getMetaParamValues(db, param, query),
-            models.sample_attr_type.findOne({
-                where: { type: param_type }
-            })
-        ])
-    })
-    .then(results => {
-        var [dataType, data, sample_attr_type] = results;
+    toJsonOrError(res, next,
+        mongo.mongo()
+        .then(db => {
+            return Promise.all([
+                getSampleKeys(db, param),
+                getMetaParamValues(db, param, query),
+                models.sample_attr_type.findOne({
+                    where: { type: param_type }
+                })
+            ])
+        })
+        .then(results => {
+            var [dataType, data, sample_attr_type] = results;
 
-        var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
-                     ? Object.values(dataType)[0]
-                     : null;
+            var type = (typeof(dataType) == "object" && Object.keys(dataType).length == 1)
+                         ? Object.values(dataType)[0]
+                         : null;
 
-        var f = function (val) { return type ? typeof(val) == type : true }
-        var sorter = type == 'number'
-                    ? function (a, b) { return a - b }
-                    : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
+            var f = function (val) { return type ? typeof(val) == type : true }
+            var sorter = type == 'number'
+                        ? function (a, b) { return a - b }
+                        : function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()) };
 
-        var units = sample_attr_type.units ? sample_attr_type.units : "";
+            var units = sample_attr_type && sample_attr_type.units ? sample_attr_type.units : "";
 
-        return [data.filter(f).sort(sorter), units];
-    })
-    .then(results => {
-        var [data, units] = results;
-        res.json({
-            param: param,
-            values: data,
-            units: units
-        });
-    })
-    .catch(err => res.status(500).send(JSON.stringify(err)));
+            return [data.filter(f).sort(sorter), units];
+        })
+        .then(results => {
+            var [data, units] = results;
+            res.json({
+                param: param,
+                values: data,
+                units: units
+            });
+        })
+    );
 });
 
 function getSampleKeys(db, optField) {
