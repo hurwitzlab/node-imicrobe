@@ -13,9 +13,14 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: false
     },
     is_active: {
-      type: DataTypes.INTEGER(4),
-      allowNull: true,
-      defaultValue: '1'
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
+    },
+    is_maintenance: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     },
     provider_name: {
       type: DataTypes.STRING(50),
