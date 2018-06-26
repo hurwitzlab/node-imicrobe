@@ -46,7 +46,7 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                           include: [
                               { model: models.sample_attr_type,
                                 include: [
-                                    models.sample_attr_type_alias,
+//                                    models.sample_attr_type_alias,
                                     models.sample_attr_type_category
                                 ]
                               }
