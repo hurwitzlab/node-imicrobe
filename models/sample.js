@@ -16,14 +16,6 @@ module.exports = function(sequelize, DataTypes) {
         key: 'project_id'
       }
     },
-    combined_assembly_id: {
-      type: DataTypes.INTEGER(10).UNSIGNED,
-      allowNull: true,
-      references: {
-        model: 'combined_assembly',
-        key: 'combined_assembly_id'
-      }
-    },
     sample_acc: {
       type: DataTypes.STRING(255),
       allowNull: true
