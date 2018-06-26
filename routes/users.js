@@ -36,7 +36,10 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
                 where: { user_id: req.params.id },
                 include: [
                     { model: models.project.scope('withUsers'),
-                      attributes: [ "project_id", "project_name", "project_code", "project_type", "url" ],
+                      attributes: [
+                        "project_id", "project_name", "project_code", "project_type", "url",
+                        [ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = projects.project_id)'), 'sample_count' ]
+                      ],
                       through: { attributes: [] }, // remove connector table from output
                       include: [
                         { model: models.investigator,
