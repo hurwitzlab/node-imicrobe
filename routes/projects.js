@@ -21,18 +21,23 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                     include: [
                         { model: models.investigator
                         , attributes: [ 'investigator_id', 'investigator_name' ]
-                        , through: { attributes: [] } // remove connector table from output
+                        , through: { attributes: [] } // remove connector table
                         },
                         { model: models.domain
                         , attributes: [ 'domain_id', 'domain_name' ]
-                        , through: { attributes: [] } // remove connector table from output
+                        , through: { attributes: [] } // remove connector table
                         },
                         { model: models.publication
-                        , attributes: ['publication_id', 'title', 'author' ]
+                        , attributes: [ 'publication_id', 'title', 'author' ]
                         },
                         { model: models.sample
-                        , attributes: ['sample_id', 'sample_name', 'sample_type' ]
-                        , include: [ models.sample_file ]
+                        , attributes: [ 'sample_id', 'sample_name', 'sample_type' ]
+                        , include: [
+                            { model: models.investigator
+                            , attributes: [ 'investigator_id', 'investigator_name' ]
+                            , through: { attributes: [] } // remove connector table
+                            }
+                          ]
                         }
                     ]
                 }),
