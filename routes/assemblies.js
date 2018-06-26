@@ -60,7 +60,7 @@ router.get('/combined_assemblies/:id(\\d+)', function(req, res, next) {
                 , attributes : [ 'project_id', 'project_name' ]
                 },
                 { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
+                , attributes: [ 'sample_id', 'sample_name', 'sample_type' ]
                 }
             ]
         })
