@@ -57,6 +57,8 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
 
                 models.sample.aggregate('sample_type', 'DISTINCT', { plain: false }),
 
+                models.sample_file_type.findAll(),
+
                 models.uproc_pfam_result.count({
                     where: { sample_id: req.params.id },
                 }),
@@ -73,8 +75,9 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
         .then( results => {
             var sample = results[0];
             sample.dataValues.available_types = results[1].map( obj => obj.DISTINCT).filter(s => (typeof s != "undefined" && s)).sort();
-            sample.dataValues.protein_count = results[2] + results[3];
-            sample.dataValues.centrifuge_count = results[4];
+            sample.dataValues.available_file_types = results[2];
+            sample.dataValues.protein_count = results[3] + results[4];
+            sample.dataValues.centrifuge_count = results[5];
             return sample;
         })
     );
