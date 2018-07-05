@@ -66,13 +66,13 @@ router.get('/sample_groups/:id(\\d+)', function(req, res, next) {
 });
 
 router.put('/sample_groups', function(req, res, next) {
+    requireAuth(req);
+
     var groupName = req.body.group_name;
     var sampleIds = req.body.sample_ids; // optional
     var userId = req.auth.user.user_id;
 
     errorOnNull(groupName);
-
-    requireAuth(req);
 
     toJsonOrError(res, next,
         models.sample_group.create({
