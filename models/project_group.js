@@ -24,6 +24,11 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.INTEGER(1),
       allowNull: false,
       defaultValue: '0'
+    },
+    creation_date: {
+      type: DataTypes.TIME,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
     }
   }, {
     tableName: 'project_group'

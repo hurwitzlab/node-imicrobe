@@ -33,6 +33,16 @@ module.exports = function(sequelize, DataTypes) {
     sample_description: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    url: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      defaultValue: ''
+    },
+    creation_date: {
+      type: DataTypes.TIME,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
     }
   }, {
     tableName: 'sample'

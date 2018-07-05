@@ -43,6 +43,11 @@ module.exports = function(sequelize, DataTypes) {
     pub_date: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    creation_date: {
+      type: DataTypes.TIME,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP')
     }
   }, {
     tableName: 'publication'
