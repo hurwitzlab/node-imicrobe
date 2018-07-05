@@ -23,6 +23,7 @@ const investigators  = require('./investigators');
 const project_groups = require('./project_groups');
 const projects       = require('./projects');
 const publications   = require('./publications');
+const sample_groups  = require('./sample_groups');
 const samples        = require('./samples');
 const users          = require('./users');
 
@@ -45,6 +46,7 @@ module.exports = function(app) {
     app.use(project_groups);
     app.use(projects);
     app.use(publications);
+    app.use(sample_groups);
     app.use(samples);
     app.use(users);
 

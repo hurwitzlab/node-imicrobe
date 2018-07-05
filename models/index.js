@@ -83,6 +83,10 @@ models.project_file.belongsToMany(models.publication, { through: models.publicat
 models.sample.belongsToMany(models.investigator, { through: models.sample_to_investigator, foreignKey: 'sample_id' });
 models.investigator.belongsToMany(models.sample, { through: models.sample_to_investigator, foreignKey: 'investigator_id' });
 
+// sample <-> sample group
+models.sample.belongsToMany(models.sample_group, { through: models.sample_to_sample_group, foreignKey: 'sample_id' });
+models.sample_group.belongsToMany(models.sample, { through: models.sample_to_sample_group, foreignKey: 'sample_group_id' });
+
 // sample <-> ontology
 models.sample.belongsToMany(models.ontology, { through: models.sample_to_ontology, foreignKey: 'sample_id' });
 models.ontology.belongsToMany(models.sample, { through: models.sample_to_ontology, foreignKey: 'ontology_id' });
