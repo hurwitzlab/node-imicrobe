@@ -30,6 +30,9 @@ router.get('/users', function(req, res, next) {
 router.get('/users/:id(\\d+)', function(req, res, next) {
     requireAuth(req);
 
+    if (req.auth.user.user_id != req.params.id) // Restrict to authenticated user
+        throw(errors.ERR_PERMISSION_DENIED);
+
     toJsonOrError(res, next,
         Promise.all([
             models.user.findOne({
@@ -117,6 +120,9 @@ router.post('/users/login', function(req, res, next) {
 
     var username = req.auth.user.user_name;
     errorOnNull(username);
+
+    if (req.auth.user.user_name != username) // Restrict to authenticated user
+        throw(errors.ERR_PERMISSION_DENIED);
 
     // Add user if not already present
     models.user.findOrCreate({
