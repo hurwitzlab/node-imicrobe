@@ -199,12 +199,12 @@ function agaveTokenValidator(req, res, next) {
                     profile: profile
                 };
 
-                return models.user.findOne({
+                return models.user.findOrCreate({
                     where: {
                         user_name: profile.username
                     }
                 })
-                .then( user => {
+                .spread( (user, created) => {
                     user.dataValues.first_name = profile.first_name;
                     user.dataValues.last_name = profile.last_name;
                     return user;
