@@ -25,12 +25,21 @@ router.get('/sample_groups', function(req, res, next) {
             where: whereClause,
             include: [
                 { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
+                , attributes: [ 'sample_id', 'sample_name', 'project_id' ]
                 , through: { attributes: [] } // remove connector table
-                , include:
+                , include: [
                     { model: models.project
                     , attributes: [ 'project_id', 'project_name' ]
+                    },
+                    { model: models.sample_file
+                    , attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file' ]
+                    , include: [
+                        { model: models.sample_file_type
+                        , attributes: [ 'sample_file_type_id', 'type' ]
+                        }
+                      ]
                     }
+                  ]
                 }
             ]
         })
@@ -53,12 +62,21 @@ router.get('/sample_groups/:id(\\d+)', function(req, res, next) {
             },
             include: [
                 { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
+                , attributes: [ 'sample_id', 'sample_name', 'project_id' ]
                 , through: { attributes: [] } // remove connector table
-                , include:
+                , include: [
                     { model: models.project
                     , attributes: [ 'project_id', 'project_name' ]
+                    },
+                    { model: models.sample_file
+                    , attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file' ]
+                    , include: [
+                        { model: models.sample_file_type
+                        , attributes: [ 'sample_file_type_id', 'type' ]
+                        }
+                      ]
                     }
+                  ]
                 }
             ]
         })
@@ -107,7 +125,7 @@ router.put('/sample_groups', function(req, res, next) {
                 },
                 include: [
                     { model: models.sample
-                    , attributes: [ 'sample_id', 'sample_name' ]
+                    , attributes: [ 'sample_id', 'sample_name', 'project_id' ]
                     , through: { attributes: [] } // remove connector table
                     , include:
                         { model: models.project
@@ -187,7 +205,7 @@ router.delete('/sample_groups/:sample_group_id(\\d+)/samples/:sample_id(\\d+)', 
                 },
                 include: [
                     { model: models.sample
-                    , attributes: [ 'sample_id', 'sample_name' ]
+                    , attributes: [ 'sample_id', 'sample_name', 'project_id' ]
                     , through: { attributes: [] } // remove connector table
                     , include:
                         { model: models.project
@@ -213,12 +231,7 @@ router.delete('/sample_groups/:sample_group_id(\\d+)/samples', function(req, res
                 sample_group_id: sampleGroupId,
                 user_id: userId
             },
-            include: [
-                { model: models.sample
-                , attributes: [ 'sample_id', 'sample_name' ]
-                , through: { attributes: [] } // remove connector table
-                }
-            ]
+            include: [ models.sample ]
         })
         .then( sample_group =>
             logAdd(req, {
@@ -248,7 +261,7 @@ router.delete('/sample_groups/:sample_group_id(\\d+)/samples', function(req, res
                 },
                 include: [
                     { model: models.sample
-                    , attributes: [ 'sample_id', 'sample_name' ]
+                    , attributes: [ 'sample_id', 'sample_name', 'project_id' ]
                     , through: { attributes: [] } // remove connector table
                     }
                 ]
