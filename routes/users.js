@@ -11,21 +11,21 @@ const errorOnNull = require('./utils').errorOnNull;
 const logAdd = require('./utils').logAdd;
 const permissions = require('./permissions')(sequelize);
 
-//router.get('/users', function(req, res, next) {
-//    requireAuth(req);
-//
-//    toJsonOrError(res, next,
-//        models.user.findAll({
-//            where: {
-//                $or: {
-//                    user_name: { $like: "%"+req.query.term+"%" },
-//                    first_name: { $like: "%"+req.query.term+"%" },
-//                    last_name: { $like: "%"+req.query.term+"%" }
-//                }
-//            }
-//        })
-//    );
-//});
+router.get('/users/search', function(req, res, next) {
+    requireAuth(req);
+
+    toJsonOrError(res, next,
+        models.user.findAll({
+            where: {
+                $or: {
+                    user_name: { $like: "%"+req.query.term+"%" },
+                    first_name: { $like: "%"+req.query.term+"%" },
+                    last_name: { $like: "%"+req.query.term+"%" }
+                }
+            }
+        })
+    );
+});
 
 router.get('/users', function(req, res, next) { // Get an individual user based on the token
     requireAuth(req);
@@ -118,10 +118,6 @@ router.post('/users/login', function(req, res, next) {
     requireAuth(req);
 
     var username = req.auth.user.user_name;
-    errorOnNull(username);
-
-    if (req.auth.user.user_name != username) // Restrict to authenticated user
-        throw(errors.ERR_PERMISSION_DENIED);
 
     // Add user if not already present
     models.user.findOrCreate({
