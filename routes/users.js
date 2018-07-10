@@ -11,32 +11,31 @@ const errorOnNull = require('./utils').errorOnNull;
 const logAdd = require('./utils').logAdd;
 const permissions = require('./permissions')(sequelize);
 
-router.get('/users', function(req, res, next) {
+//router.get('/users', function(req, res, next) {
+//    requireAuth(req);
+//
+//    toJsonOrError(res, next,
+//        models.user.findAll({
+//            where: {
+//                $or: {
+//                    user_name: { $like: "%"+req.query.term+"%" },
+//                    first_name: { $like: "%"+req.query.term+"%" },
+//                    last_name: { $like: "%"+req.query.term+"%" }
+//                }
+//            }
+//        })
+//    );
+//});
+
+router.get('/users', function(req, res, next) { // Get an individual user based on the token
     requireAuth(req);
 
-    toJsonOrError(res, next,
-        models.user.findAll({
-            where: {
-                $or: {
-                    user_name: { $like: "%"+req.query.term+"%" },
-                    first_name: { $like: "%"+req.query.term+"%" },
-                    last_name: { $like: "%"+req.query.term+"%" }
-                }
-            }
-        })
-    );
-});
-
-router.get('/users/:id(\\d+)', function(req, res, next) {
-    requireAuth(req);
-
-    if (req.auth.user.user_id != req.params.id) // Restrict to authenticated user
-        throw(errors.ERR_PERMISSION_DENIED);
+    var userId = req.auth.user.user_id;
 
     toJsonOrError(res, next,
         Promise.all([
             models.user.findOne({
-                where: { user_id: req.params.id },
+                where: { user_id: userId },
                 include: [
                     { model: models.project.scope('withUsers'),
                       attributes: [
@@ -83,7 +82,7 @@ router.get('/users/:id(\\d+)', function(req, res, next) {
             .then( db => {
                 return new Promise(function (resolve, reject) {
                     db.collection('log').find(
-                        { user_id: req.params.id*1 }, // ensure integer value
+                        { user_id: userId*1 }, // ensure integer value
                         { _id: 1, date: 1, title: 1, url: 1 }
                     )
                     .sort({ date: 1 })
