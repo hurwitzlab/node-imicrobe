@@ -42,11 +42,11 @@ router.get('/users', function(req, res, next) { // Get an individual user based 
                         "project_id", "project_name", "project_code", "project_type", "url",
                         [ sequelize.literal('(SELECT COUNT(*) FROM sample WHERE sample.project_id = projects.project_id)'), 'sample_count' ]
                       ],
-                      through: { attributes: [] }, // remove connector table from output
+                      through: { attributes: [] }, // remove connector table
                       include: [
                         { model: models.investigator,
                           attributes: [ 'investigator_id', 'investigator_name', 'institution' ],
-                          through: { attributes: [] } // remove connector table from output
+                          through: { attributes: [] } // remove connector table
                         },
                         { model: models.publication },
                         { model: models.sample,
@@ -64,14 +64,21 @@ router.get('/users', function(req, res, next) { // Get an individual user based 
                           ]
                         },
                       ]
-                    },
+                    }
+                ]
+            }),
+
+            // Split this sub-query out from above query due to extreme slowness (because of nested user table inclusions)
+            models.user.findOne({
+                where: { user_id: userId },
+                include: [
                     { model: models.project_group.scope('withUsers')
                     , attributes: [ "project_group_id", "group_name", "description", "url" ]
-                    , through: { attributes: [] } // remove connector table from output
+                    , through: { attributes: [] } // remove connector table
                     , include: [
-                        { model: models.project.scope('withUsers')
+                        { model: models.project
                         , attributes: [ "project_id", "project_name", "project_code", "project_type", "url" ]
-                        , through: { attributes: [] } // remove connector table from output
+                        , through: { attributes: [] } // remove connector table
                         }
                       ]
                     }
@@ -98,7 +105,8 @@ router.get('/users', function(req, res, next) { // Get an individual user based 
             var user = results[0];
             if (!user)
                 throw(errors.ERR_NOT_FOUND);
-            user.dataValues.log = results[1];
+            user.dataValues.project_groups = results[1].dataValues.project_groups;
+            user.dataValues.log = results[2];
             return user;
         })
     );
