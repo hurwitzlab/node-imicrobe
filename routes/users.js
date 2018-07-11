@@ -148,10 +148,15 @@ router.post('/users/login', function(req, res, next) {
             })
         )
         .then( login =>
-            res.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
-                login_id: login.login_id,
-                user: user
+            models.user.findOne({
+                where: { user_id: user.user_id }
             })
+            .then( user =>
+                res.json({ // Respond w/o login_date: this is a workaround to prevent Elm decoder from failing on login_date = "fn":"NOW"
+                    login_id: login.login_id,
+                    user: user
+                })
+            )
         );
     })
     .catch(next);
