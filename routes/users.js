@@ -132,10 +132,11 @@ router.post('/users/login', function(req, res, next) {
         where: { user_name: username }
     })
     .spread( (user, created) => {
-        // For new user set first_name/last_name, or update for existing user (in case they changed them)
+        // For new user set first_name/last_name/email, or update for existing user (in case they changed any of those fields)
         models.user.update(
             { first_name: req.auth.user.first_name
             , last_name: req.auth.user.last_name
+            , email: req.auth.user.email
             },
             { where: { user_name: username } }
         )

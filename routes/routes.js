@@ -207,6 +207,7 @@ function agaveTokenValidator(req, res, next) {
                 .spread( (user, created) => {
                     user.dataValues.first_name = profile.first_name;
                     user.dataValues.last_name = profile.last_name;
+                    user.dataValues.email = profile.email
                     return user;
                 });
             }
