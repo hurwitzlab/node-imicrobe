@@ -270,4 +270,36 @@ router.delete('/sample_groups/:sample_group_id(\\d+)/samples', function(req, res
     );
 });
 
+router.get('/sample_groups/:id(\\d+)/files', function(req, res, next) {
+    toJsonOrError(res, next,
+        models.sample_group.findOne({
+            where: {
+                sample_group_id: req.params.id,
+            },
+            include: [
+                { model: models.sample
+                , include: [
+                    { model: models.sample_file,
+                      attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file' ],
+                      include: [
+                        { model: models.sample
+                        , attributes: [ 'sample_id', 'sample_name' ]
+                        },
+                        { model: models.sample_file_type
+                        , attributes: [ 'sample_file_type_id', 'type' ]
+                        }
+                      ]
+                    }
+                ]
+                }
+            ]
+        })
+        .then( sample_group => {
+            if (!sample_group)
+                throw(errors.ERR_NOT_FOUND);
+            return sample_group.samples.reduce((acc, s) => acc.concat(s.sample_files), []);
+        })
+    );
+});
+
 module.exports = router;
