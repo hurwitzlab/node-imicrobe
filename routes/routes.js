@@ -6,6 +6,7 @@ const Promise     = require('promise');
 const bodyParser  = require('body-parser');
 const sendmail    = require('sendmail')();
 const requestp    = require('request-promise');
+const https       = require('https');
 const sequelize   = require('../config/mysql').sequelize;
 const models      = require('../models/index');
 
@@ -129,6 +130,40 @@ module.exports = function(app) {
                 status: "success"
             });
         })
+    });
+
+    app.get('/download/:filepath(\\S+)', function(req, res, next) {
+        // Can be done wit res.download(filename) but we want to send content directly
+        res.setHeader('Content-disposition', 'attachment;filename=foo.txt');
+        res.setHeader('Content-type', 'application/octet-stream');
+
+        var options = {
+            host: config.agaveBaseUrl.replace(/^https?:\/\//,''), // remove protocol
+            path: "/files/v2/media/" + req.params.filepath,
+            headers: {
+                Accept: "application/octet-stream",
+                Authorization: req.query.token
+            }
+        }
+
+        // Request file from Agave and stream response to client
+        try {
+            https.get(options,
+                function(response) {
+                    // Stream to client
+                    response.on('data', function(data) {
+                        res.write(data);
+                    });
+                    // Handle end of transaction
+                    response.on('end', function() {
+                        res.end();
+                    });
+                });
+        }
+        catch(error) {
+            console.log(error);
+            res.send(500, error)
+        }
     });
 
     app.get('/search/:query', function (req, res, next) {
