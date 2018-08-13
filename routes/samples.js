@@ -23,7 +23,7 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                     where: { sample_id: req.params.id },
                     include: [
                         { model: models.project.scope('withUsers', 'withGroups')
-                        , attributes: [ 'project_id', 'project_code', 'project_name', 'project_type', 'description' ]
+                        , attributes: [ 'project_id', 'project_code', 'project_name', 'project_type', 'description', 'private' ]
                         },
                         { model: models.investigator
                         , attributes: [ 'investigator_id', 'investigator_name' ]
