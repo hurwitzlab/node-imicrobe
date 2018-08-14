@@ -83,6 +83,11 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: false,
       defaultValue: '0'
     },
+    publication_status: {
+      type: DataTypes.INTEGER(1),
+      allowNull: false,
+      defaultValue: '0'
+    },
     creation_date: {
       type: DataTypes.TIME,
       allowNull: false,

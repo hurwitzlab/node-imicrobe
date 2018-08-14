@@ -11,6 +11,15 @@ const errorOnNull = require('./utils').errorOnNull;
 const logAdd = require('./utils').logAdd;
 const permissions = require('./permissions')(sequelize);
 
+
+// Define possible values for publication_status
+const PUBLICATION_UNPUBLISHED = 0;
+const PUBLICATION_PENDING = 1;
+const PUBLICATION_SUBMITTED = 2;
+const PUBLICATION_PUBLISHED = 3;
+const PUBLICATION_ERROR = -1;
+
+
 router.get('/projects/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
         permissions.checkProjectPermissions(req.params.id, req.auth.user)
@@ -180,6 +189,7 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
 
     var project_id = req.params.project_id;
     var project_name = req.body.project_name;
+    var project_description = req.body.project_description;
     var project_code = req.body.project_code;
     var project_type = req.body.project_type;
     var project_url = req.body.project_url;
@@ -201,6 +211,7 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
                 { project_name: project_name,
                   project_code: project_code,
                   project_type: project_type,
+                  description: project_description,
                   url: project_url
                 },
                 { where: { project_id: project_id } }
@@ -252,6 +263,68 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
         )
     );
 });
+
+router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
+    requireAuth(req);
+
+    var project_id = req.params.project_id;
+    var validate = req.params.validate; // just test whether project is ready for submission, don't actually submit
+
+    toJsonOrError(res, next,
+        permissions.requireProjectOwnerPermission(project_id, req.auth.user)
+        .then( () =>
+            validateProjectForPublication(project_id) // will throw an error if project not ready
+        )
+        .then( project => {
+            if (validate)
+                return "success"
+            else
+                return logAdd(req, {
+                    title: "Submitted project '" + project.project_name + "' for publishing",
+                    type: "publishProject",
+                    project_id: project_id
+                })
+                .then( () =>
+                    models.project.update(
+                        { publication_status: PUBLICATION_PENDING },
+                        { where: { project_id: project_id } }
+                    )
+                 )
+                 .then( () => "success" );
+        })
+    )
+});
+
+function validateProjectForPublication(project_id) {
+    return models.project.findOne({
+        where: { project_id: project_id },
+        include: [
+            { model: models.domain },
+            { model: models.investigator },
+            { model: models.sample }
+        ]
+    })
+    .then( project => {
+        if (!project)
+            throw(errors.ERR_NOT_FOUND);
+
+        var errorList = [];
+
+        if (!project.project_name)
+            errorList.push("Missing project name field");
+        if (!project.project_code)
+            errorList.push("Missing project accession field");
+        if (!project.project_type)
+            errorList.push("Missing project type field");
+        if (!project.description)
+            errorList.push("Missing project description field");
+
+        if (errorList.length > 0)
+            throw(new errors.MyError(errorList));
+
+        return project;
+    });
+}
 
 router.delete('/projects/:project_id(\\d+)', function (req, res, next) {
     requireAuth(req);
