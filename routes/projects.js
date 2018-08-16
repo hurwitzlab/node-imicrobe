@@ -286,7 +286,9 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
                 })
                 .then( () =>
                     models.project.update(
-                        { publication_status: PUBLICATION_PENDING },
+                        { publication_status: PUBLICATION_PENDING,
+                          publication_submitter_id: req.auth.user.user_id,
+                        },
                         { where: { project_id: project_id } }
                     )
                  )
