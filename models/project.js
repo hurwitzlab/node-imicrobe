@@ -83,18 +83,25 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: false,
       defaultValue: '0'
     },
-    publication_status: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      defaultValue: ''
+    ebi_status: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
     },
-    publication_submitter_id: {
+    ebi_submitter_id: {
       type: DataTypes.INTEGER(10).UNSIGNED,
       allowNull: true,
       references: {
         model: 'user',
         key: 'user_id'
       }
+    },
+    ebi_submission_date: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    ebi_accn: {
+      type: DataTypes.STRING(30),
+      allowNull: true
     },
     creation_date: {
       type: DataTypes.TIME,
