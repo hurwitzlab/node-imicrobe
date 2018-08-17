@@ -84,9 +84,9 @@ module.exports = function(sequelize, DataTypes) {
       defaultValue: '0'
     },
     publication_status: {
-      type: DataTypes.INTEGER(1),
+      type: DataTypes.STRING(255),
       allowNull: false,
-      defaultValue: '0'
+      defaultValue: ''
     },
     publication_submitter_id: {
       type: DataTypes.INTEGER(10).UNSIGNED,
