@@ -284,7 +284,7 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
                         { where: { project_id: project_id } }
                     )
                  )
-                 .then( () => "success" );
+                 .then( () => "PENDING" );
         })
     )
 });
