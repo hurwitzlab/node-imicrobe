@@ -12,14 +12,6 @@ const logAdd = require('./utils').logAdd;
 const permissions = require('./permissions')(sequelize);
 
 
-// Define possible values for publication_status
-const PUBLICATION_UNPUBLISHED = 0;
-const PUBLICATION_PENDING = 1;
-const PUBLICATION_SUBMITTED = 2;
-const PUBLICATION_PUBLISHED = 3;
-const PUBLICATION_ERROR = -1;
-
-
 router.get('/projects/:id(\\d+)', function(req, res, next) {
     toJsonOrError(res, next,
         permissions.checkProjectPermissions(req.params.id, req.auth.user)
@@ -277,7 +269,7 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
         )
         .then( project => {
             if (validate)
-                return "success"
+                return "success";
             else
                 return logAdd(req, {
                     title: "Submitted project '" + project.project_name + "' for publishing",
@@ -286,8 +278,8 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
                 })
                 .then( () =>
                     models.project.update(
-                        { publication_status: PUBLICATION_PENDING,
-                          publication_submitter_id: req.auth.user.user_id,
+                        { ebi_status: "PENDING",
+                          ebi_submitter_id: req.auth.user.user_id,
                         },
                         { where: { project_id: project_id } }
                     )
