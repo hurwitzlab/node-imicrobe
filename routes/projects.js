@@ -290,7 +290,7 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
 });
 
 function validateProjectForPublication(project_id) {
-    return models.project.findOne({
+    return models.project.scope('withUsers', 'withGroups').findOne({
         where: { project_id: project_id },
         include: [
             { model: models.domain },
@@ -304,6 +304,7 @@ function validateProjectForPublication(project_id) {
 
         var errorList = [];
 
+        // Check for required fields
         if (!project.project_name)
             errorList.push("Missing project name field");
         if (!project.project_code)
@@ -313,6 +314,25 @@ function validateProjectForPublication(project_id) {
         if (!project.description)
             errorList.push("Missing project description field");
 
+        // Require that project (and associated files) have been shared with the "imicrobe" user
+        // TODO move into function in permission.js or use checkProjectPermissions
+        var userAccess =
+            project.users &&
+                project.users
+                .map(u => u.user_name)
+                .includes("imicrobe");
+
+        var groupAccess =
+            project.project_groups &&
+                project.project_groups
+                .reduce((acc, g) => acc.concat(g.users), [])
+                .map(u => u.user_name)
+                .includes("imicrobe");
+
+        if (!userAccess && !groupAccess)
+            errorList.push("Share project with 'imicrobe' user");
+
+        // Throw error(s)
         if (errorList.length > 0)
             throw(new errors.MyError(errorList));
 
