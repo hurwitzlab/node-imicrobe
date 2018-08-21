@@ -295,7 +295,15 @@ function validateProjectForPublication(project_id) {
         include: [
             { model: models.domain },
             { model: models.investigator },
-            { model: models.sample }
+            { model: models.sample,
+              include: [
+                { model: models.sample_attr,
+                  include: [
+                    { model: models.sample_attr_type }
+                  ]
+                }
+              ]
+            }
         ]
     })
     .then( project => {
@@ -304,7 +312,7 @@ function validateProjectForPublication(project_id) {
 
         var errorList = [];
 
-        // Check for required fields
+        // Check for required fields in Project
         if (!project.project_name)
             errorList.push("Missing project name field");
         if (!project.project_code)
@@ -314,8 +322,30 @@ function validateProjectForPublication(project_id) {
         if (!project.description)
             errorList.push("Missing project description field");
 
+        // Check for required fields in Samples
+        project.samples.forEach(sample => {
+            var attrs = {};
+            sample.sample_attrs.forEach(attr => {
+                var key = attr.sample_attr_type.type.toLowerCase();
+                attrs[key] = attr.attr_value;
+            });
+
+            if (!attrs["library_strategy"])
+                errorList.push("Missing library_strategy attribute for Sample '" + sample.sample_name + "'");
+            if (!attrs["library_source"])
+                errorList.push("Missing library_source attribute for Sample '" + sample.sample_name + "'");
+            if (!attrs["library_selection"])
+                errorList.push("Missing library_selection attribute for Sample '" + sample.sample_name + "'");
+            if (!attrs["library_layout"])
+                errorList.push("Missing library_layout attribute for Sample '" + sample.sample_name + "'");
+            if (!attrs["platform_type"])
+                errorList.push("Missing platform_type attribute for Sample '" + sample.sample_name + "'");
+            if (!attrs["platform_model"])
+                errorList.push("Missing platform_model attribute for Sample '" + sample.sample_name + "'");
+        });
+
         // Require that project (and associated files) have been shared with the "imicrobe" user
-        // TODO move into function in permission.js or use checkProjectPermissions
+        // TODO automatically share files with "imicrobe"
         var userAccess =
             project.users &&
                 project.users
