@@ -29,7 +29,7 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                         , through: { attributes: [] } // remove connector table
                         },
                         { model: models.publication
-                        , attributes: [ 'publication_id', 'title', 'author' ]
+                        , attributes: [ 'publication_id', 'title', 'author', 'pubmed_id', 'doi', 'pub_date' ]
                         },
                         { model: models.sample
                         , attributes: [ 'sample_id', 'sample_name', 'sample_type' ]
