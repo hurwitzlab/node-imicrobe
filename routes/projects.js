@@ -184,6 +184,7 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
     var project_description = req.body.project_description;
     var project_code = req.body.project_code;
     var project_type = req.body.project_type;
+    var project_institution = req.body.project_institution;
     var project_url = req.body.project_url;
     var domains = req.body.domains;
     var investigators = req.body.investigators;
@@ -204,6 +205,7 @@ router.post('/projects/:project_id(\\d+)', function (req, res, next) {
                   project_code: project_code,
                   project_type: project_type,
                   description: project_description,
+                  institution: project_institution,
                   url: project_url
                 },
                 { where: { project_id: project_id } }
@@ -321,6 +323,8 @@ function validateProjectForPublication(project_id) {
             errorList.push("Missing project type field");
         if (!project.description)
             errorList.push("Missing project description field");
+        if (!project.institution)
+            errorList.push("Missing project institution field");
 
         // Check for required fields in Samples
         project.samples.forEach(sample => {
