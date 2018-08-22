@@ -334,6 +334,8 @@ function validateProjectForPublication(project_id) {
                 attrs[key] = attr.attr_value;
             });
 
+            if (!attrs["taxon_id"])
+                errorList.push("Missing taxon_id attribute for Sample '" + sample.sample_name + "'");
             if (!attrs["library_strategy"])
                 errorList.push("Missing library_strategy attribute for Sample '" + sample.sample_name + "'");
             if (!attrs["library_source"])
