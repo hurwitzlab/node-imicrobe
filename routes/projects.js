@@ -262,33 +262,31 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
     requireAuth(req);
 
     var project_id = req.params.project_id;
-    var validate = req.params.validate; // just test whether project is ready for submission, don't actually submit
+    var validate = req.body.validate; // just test whether project is ready for submission, don't actually submit
 
-    toJsonOrError(res, next,
-        permissions.requireProjectOwnerPermission(project_id, req.auth.user)
-        .then( () =>
-            validateProjectForPublication(project_id) // will throw an error if project not ready
-        )
-        .then( project => {
-            if (validate)
-                return "success";
-            else
-                return logAdd(req, {
-                    title: "Submitted project '" + project.project_name + "' for publishing",
-                    type: "publishProject",
-                    project_id: project_id
-                })
-                .then( () =>
-                    models.project.update(
-                        { ebi_status: "PENDING",
-                          ebi_submitter_id: req.auth.user.user_id,
-                        },
-                        { where: { project_id: project_id } }
-                    )
-                 )
-                 .then( () => "PENDING" );
-        })
+    permissions.requireProjectOwnerPermission(project_id, req.auth.user)
+    .then( () =>
+        validateProjectForPublication(project_id) // will throw an error if project not ready
     )
+    .then( project => {
+        if (validate)
+            return res.send("success");
+        else
+            return logAdd(req, {
+                title: "Submitted project '" + project.project_name + "' for publishing",
+                type: "publishProject",
+                project_id: project_id
+            })
+            .then( () =>
+                models.project.update(
+                    { ebi_status: "PENDING",
+                      ebi_submitter_id: req.auth.user.user_id,
+                    },
+                    { where: { project_id: project_id } }
+                )
+             )
+             .then( () => res.send("PENDING") );
+    });
 });
 
 function validateProjectForPublication(project_id) {
