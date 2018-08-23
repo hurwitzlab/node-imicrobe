@@ -286,7 +286,8 @@ router.post('/projects/:project_id(\\d+)/publish', function (req, res, next) {
                 )
              )
              .then( () => res.send("PENDING") );
-    });
+    })
+    .catch(next);
 });
 
 function validateProjectForPublication(project_id) {
