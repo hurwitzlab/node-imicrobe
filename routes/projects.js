@@ -326,13 +326,6 @@ function validateProjectForPublication(project_id) {
         if (!project.institution)
             errorList.push("Missing project institution field");
 
-        // Check for at least one read file across all samples
-        var readFiles = project.samples
-            .reduce((acc, s) => acc.concat(s.sample_files), [])
-            .filter(f => f.sample_file_type.type.toLowerCase() == "reads");
-        if (!readFiles || readFiles.length == 0)
-            errorList.push("No read files associated with samples");
-
         // Check for required fields in Samples
         project.samples.forEach(sample => {
             var attrs = {};
