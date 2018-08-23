@@ -299,9 +299,10 @@ function validateProjectForPublication(project_id) {
             { model: models.sample,
               include: [
                 { model: models.sample_attr,
-                  include: [
-                    { model: models.sample_attr_type }
-                  ]
+                  include: [ models.sample_attr_type ]
+                },
+                { model: models.sample_file,
+                  include: [ models.sample_file_type ]
                 }
               ]
             }
@@ -325,6 +326,13 @@ function validateProjectForPublication(project_id) {
         if (!project.institution)
             errorList.push("Missing project institution field");
 
+        // Check for at least one read file across all samples
+        var readFiles = project.samples
+            .reduce((acc, s) => acc.concat(s.sample_files), [])
+            .filter(f => f.sample_file_type.type.toLowerCase() == "reads");
+        if (!readFiles || readFiles.length == 0)
+            errorList.push("No read files associated with samples");
+
         // Check for required fields in Samples
         project.samples.forEach(sample => {
             var attrs = {};
@@ -347,6 +355,11 @@ function validateProjectForPublication(project_id) {
                 errorList.push("Missing platform_type attribute for Sample '" + sample.sample_name + "'");
             if (!attrs["platform_model"])
                 errorList.push("Missing platform_model attribute for Sample '" + sample.sample_name + "'");
+
+            // Check for at least one read file in this sample
+            var readFiles = sample.sample_files.filter(f => f.sample_file_type.type.toLowerCase() == "reads");
+            if (!readFiles || readFiles.length == 0)
+                errorList.push("No read files associated with Sample '" + sample.sample_name + "'");
         });
 
         // Require that project (and associated files) have been shared with the "imicrobe" user
