@@ -319,7 +319,7 @@ function validateProjectForPublication(project_id) {
             errorList.push("Missing project name field");
         if (!project.project_code)
             errorList.push("Missing project accession field");
-        if (!project.project_type)
+        if (!project.project_type || project.project_type.toLowerCase() == "<not provided>")
             errorList.push("Missing project type field");
         if (!project.description)
             errorList.push("Missing project description field");
