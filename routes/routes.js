@@ -7,6 +7,7 @@ const bodyParser  = require('body-parser');
 const sendmail    = require('sendmail')();
 const requestp    = require('request-promise');
 const https       = require('https');
+const pathlib     = require('path');
 const sequelize   = require('../config/mysql').sequelize;
 const models      = require('../models/index');
 
@@ -134,7 +135,7 @@ module.exports = function(app) {
 
     app.get('/download/:filepath(\\S+)', function(req, res, next) {
         // Can be done wit res.download(filename) but we want to send content directly
-        res.setHeader('Content-disposition', 'attachment;filename=foo.txt');
+        res.setHeader('Content-disposition', 'attachment;filename=' + pathlib.basename(req.params.filepath));
         res.setHeader('Content-type', 'application/octet-stream');
 
         var options = {
