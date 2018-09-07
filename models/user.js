@@ -33,6 +33,11 @@ module.exports = function(sequelize, DataTypes) {
     orcid: {
       type: DataTypes.STRING(30),
       allowNull: true
+    },
+    role: {
+      type: DataTypes.INTEGER(1),
+      allowNull: false,
+      defaultValue: '0'
     }
   }, {
     tableName: 'user'
