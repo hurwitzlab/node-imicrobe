@@ -169,7 +169,16 @@ module.exports = function(app) {
 
     app.get('/search/:query', function (req, res, next) {
         getSearchResults(req.params.query)
-        .then( data => res.json(data) );
+        .then( results => {
+            return models.query_log.create({
+                num_found: results.length,
+                query: req.params.query,
+                ip: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+                user_id: req.auth.user ? req.auth.user.user_id+"" : null
+            })
+            .then( () => results )
+        })
+        .then( results => res.json(results) );
     });
 
     app.get('/', function(req, res, next) {
