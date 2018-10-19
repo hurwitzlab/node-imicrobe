@@ -760,23 +760,42 @@ router.post('/samples/search', jsonParser, function (req, res, next) {
 });
 
 router.get('/samples/taxonomy_search/:query', function (req, res, next) {
-    //TODO currently private samples do not have associated centrifuge results, but in the future will need to check permissions here
+    //TODO currently only public samples have associated centrifuge results, but in the future will need to check permissions here
+
     toJsonOrError(res, next,
-        models.centrifuge.findAll({
+        models.centrifuge.findAndCountAll({
+            attributes: [ 'centrifuge_id', 'tax_id', 'name' ],
+            offset: req.query.offset * 1,
+            limit: req.query.limit * 1,
+            subQuery: false, // needed for limit to work
             where: sequelize.or(
                 { tax_id: req.params.query },
                 { name: { $like: '%'+req.params.query+'%' } }
             ),
+            order: ( req.query.sortCol ? [ [ sequelize.col(req.query.sortCol), req.query.order ] ] : null ),
             include: [
                 { model: models.sample,
                   attributes: [ 'sample_id', 'sample_name', 'project_id' ],
+                  where: { '$samples.sample_to_centrifuge.abundance$': { $gt: req.query.abundance * 1 } },
                   include: [
                     { model: models.project,
-                      attributes: [ 'project_id', 'project_name' ]
+                      attributes: [ 'project_id', 'project_name' ],
+                      where: ( req.query.searchTerm ?
+                          sequelize.or(
+                              { '$samples.sample_name$': { $like: '%'+req.query.searchTerm+'%' } },
+                              { project_name: { $like: '%'+req.query.searchTerm+'%' } }
+                          )
+                          : null
+                      )
                     }
                   ]
                 }
             ]
+        })
+        .then( result => {
+            var r = result.rows[0];
+            r.dataValues.sample_count = result.count;
+            return r;
         })
     );
 });
@@ -785,7 +804,7 @@ router.get('/samples/protein_search/:db/:query', function (req, res, next) {
     var db = req.params.db.toUpperCase();
     var query = req.params.query.toUpperCase();
 
-    //TODO current private samples do not have associated protein results, but in the future will need to check permissions here
+    //TODO current only public samples have associated protein results, but in the future will need to check permissions here
 
     if (db == "PFAM") {
         toJsonOrError(res, next,
