@@ -793,16 +793,11 @@ router.get('/samples/taxonomy_search/:query', function (req, res, next) {
             ]
         })
         .then( result => {
-            var r = result.rows[0];
-            if (!r) {
-                return {
-                    sample_count: 0,
-                    samples: []
-                }
-            }
-
-            r.dataValues.sample_count = result.count;
-            return r;
+            var allRows = result.rows.reduce((acc, r) => acc.concat(r.samples), []);
+            return {
+                sample_count: result.count,
+                samples: allRows
+            };
         })
     );
 });
