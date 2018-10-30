@@ -25,6 +25,12 @@ const PERMISSION_CODES = {
     "": PERMISSION_NONE
 };
 
+// User role codes -- in order of increasing access rights
+const ROLE_NONE = 0; // standard user
+const ROLE_BETA = 1; // beta user
+const ROLE_ADMIN = 127; // admin -- can view all projects/samples but not edit
+
+
 module.exports = function(sequelize) {
     return {
         // Permission codes -- in order of decreasing access rights
@@ -167,6 +173,9 @@ function checkProjectPermissions(projectId, user) {
 
         if (!user || !user.user_id)
             throw(errors.ERR_PERMISSION_DENIED);
+
+        if (user.role >= ROLE_ADMIN)
+            return PERMISSION_READ_ONLY;
 
         var userPerm =
             project.users &&
