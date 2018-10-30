@@ -1,7 +1,7 @@
 const models = require('../models');
 const express = require('express');
 const router  = express.Router();
-const toJsonOrError = require('./utils').toJsonOrError;
+const toJsonOrError = require('../libs/utils').toJsonOrError;
 
 router.get('/domains', function(req, res, next) {
     toJsonOrError(res, next,

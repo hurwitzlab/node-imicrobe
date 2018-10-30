@@ -1,6 +1,6 @@
 const sequelize = require('../config/mysql').sequelize;
 const models = require('../models');
-const errors = require('./errors');
+const errors = require('../libs/errors');
 const Promise = require('promise');
 const requestp = require('request-promise');
 const config = require('../config.json');

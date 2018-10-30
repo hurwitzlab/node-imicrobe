@@ -3,13 +3,13 @@ const models = require('../models');
 const express = require('express');
 const router  = express.Router();
 const Promise = require('promise');
-const errors = require('./errors');
-const EMPTY_PROMISE = require('./utils').EMPTY_PROMISE;
-const toJsonOrError = require('./utils').toJsonOrError;
-const requireAuth = require('./utils').requireAuth;
-const errorOnNull = require('./utils').errorOnNull;
-const logAdd = require('./utils').logAdd;
-const permissions = require('./permissions')(sequelize);
+const errors = require('../libs/errors');
+const EMPTY_PROMISE = require('../libs/utils').EMPTY_PROMISE;
+const toJsonOrError = require('../libs/utils').toJsonOrError;
+const requireAuth = require('../libs/utils').requireAuth;
+const errorOnNull = require('../libs/utils').errorOnNull;
+const logAdd = require('../libs/utils').logAdd;
+const permissions = require('../libs/permissions')(sequelize);
 
 router.get('/sample_groups', function(req, res, next) {
     //requireAuth(req); // don't require authentication, just return empty list for anonymous request

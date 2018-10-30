@@ -4,12 +4,12 @@ const mongo = require('../config/mongo').mongo;
 const express = require('express');
 const router  = express.Router();
 const Promise = require('promise');
-const errors = require('./errors');
-const toJsonOrError = require('./utils').toJsonOrError;
-const requireAuth = require('./utils').requireAuth;
-const errorOnNull = require('./utils').errorOnNull;
-const logAdd = require('./utils').logAdd;
-const permissions = require('./permissions')(sequelize);
+const errors = require('../libs/errors');
+const toJsonOrError = require('../libs/utils').toJsonOrError;
+const requireAuth = require('../libs/utils').requireAuth;
+const errorOnNull = require('../libs/utils').errorOnNull;
+const logAdd = require('../libs/utils').logAdd;
+const permissions = require('../libs/permissions')(sequelize);
 
 router.get('/users/search', function(req, res, next) {
     requireAuth(req);

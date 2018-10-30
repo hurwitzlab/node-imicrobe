@@ -11,12 +11,12 @@ const pathlib     = require('path');
 const sequelize   = require('../config/mysql').sequelize;
 const models      = require('../models/index');
 
-const errors = require('./errors');
-const toJsonOrError = require('./utils').toJsonOrError;
-const requireAuth = require('./utils').requireAuth;
-const errorOnNull = require('./utils').errorOnNull;
-const logAdd = require('./utils').logAdd;
-const permissions = require('./permissions')(sequelize);
+const errors = require('../libs/errors');
+const toJsonOrError = require('../libs/utils').toJsonOrError;
+const requireAuth = require('../libs/utils').requireAuth;
+const errorOnNull = require('../libs/utils').errorOnNull;
+const logAdd = require('../libs/utils').logAdd;
+const permissions = require('../libs/permissions')(sequelize);
 
 const apps           = require('./apps');
 const assemblies     = require('./assemblies');

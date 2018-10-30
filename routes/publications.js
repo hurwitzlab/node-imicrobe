@@ -2,12 +2,12 @@ const sequelize = require('../config/mysql').sequelize;
 const models = require('../models');
 const express = require('express');
 const router  = express.Router();
-const errors = require('./errors');
-const toJsonOrError = require('./utils').toJsonOrError;
-const requireAuth = require('./utils').requireAuth;
-const errorOnNull = require('./utils').errorOnNull;
-const logAdd = require('./utils').logAdd;
-const permissions = require('./permissions')(sequelize);
+const errors = require('../libs/errors');
+const toJsonOrError = require('../libs/utils').toJsonOrError;
+const requireAuth = require('../libs/utils').requireAuth;
+const errorOnNull = require('../libs/utils').errorOnNull;
+const logAdd = require('../libs/utils').logAdd;
+const permissions = require('../libs/permissions')(sequelize);
 
 router.get('/pubchase', function(req, res, next) {
     toJsonOrError(res, next,

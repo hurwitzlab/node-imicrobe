@@ -1,5 +1,5 @@
 const mongo = require('../config/mongo').mongo;
-const errors = require('./errors');
+const errors = require('../libs/errors');
 
 
 const EMPTY_PROMISE = new Promise((resolve) => { resolve(); });
