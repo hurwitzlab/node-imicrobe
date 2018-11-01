@@ -175,7 +175,7 @@ function checkProjectPermissions(projectId, user) {
             throw(errors.ERR_PERMISSION_DENIED);
 
         if (user.role >= ROLE_ADMIN)
-            return PERMISSION_READ_ONLY;
+            return PERMISSION_OWNER;
 
         var userPerm =
             project.users &&
