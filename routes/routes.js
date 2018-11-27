@@ -2,6 +2,7 @@
 
 const printf      = require('printf');
 const cors        = require('cors');
+const compression = require('compression');
 const Promise     = require('promise');
 const bodyParser  = require('body-parser');
 const sendmail    = require('sendmail')();
@@ -36,6 +37,7 @@ const config = require('../config.json');
 //TODO split up into modules
 module.exports = function(app) {
     app.use(cors());
+    app.use(compression()); // automatically gzip responses
     app.use(bodyParser.json()); // support json encoded bodies
     app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
     app.use(requestLogger);
