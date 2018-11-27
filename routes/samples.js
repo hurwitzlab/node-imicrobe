@@ -714,49 +714,49 @@ router.delete('/samples/:sample_id(\\d+)/files/:file_id(\\d+)', function (req, r
 router.post('/samples/search', jsonParser, function (req, res, next) {
     console.log(req.body);
 
-    mongo.mongo()
-    .then( db => getMetaSearchResults(db, req.body) )
-    .then( data => {
-        // Add user permission info
-        var samplesById = {};
-        var sampleIds = data.map( s => {
-            samplesById[s.specimen__sample_id] = {};
-            samplesById[s.specimen__sample_id]["attributes"] = s;
-            return s.specimen__sample_id
-        });
-
-        return models.sample.findAll({
-            where: { sample_id: { $in: sampleIds } },
-            include: [
-                { model: models.project.scope('withUsers', 'withGroups')
-                //, attributes: [ 'project_id', 'project_name' ]
-                }
-            ]
-        })
-        .then( samples => {
-            samples.forEach(s => {
-                // Merge users from direct sharing and through groups, preventing duplicates //TODO move into function
-                var users = s.project.users;
-                var seen = users.reduce((map, user) => { map[user.user_id] = 1; return map; }, {});
-                var allUsers = s.project.project_groups
-                    .reduce((acc, g) => acc.concat(g.users), [])
-                    .reduce((acc, u) => {
-                        if (!seen[u.user_id]) {
-                            u.dataValues.project_to_user = { permission: u.project_group_to_user.permission }; // FIXME kludge
-                            acc.push(u);
-                        }
-                        return acc;
-                    }, [])
-                    .concat(users);
-
-                samplesById[s.sample_id].users = allUsers;
+    toJsonOrError(res, next,
+        mongo.mongo()
+        .then( db => getMetaSearchResults(db, req.body) )
+        .then( data => {
+            // Add user permission info
+            var samplesById = {};
+            var sampleIds = data.map( s => {
+                samplesById[s.specimen__sample_id] = {};
+                samplesById[s.specimen__sample_id]["attributes"] = s;
+                return s.specimen__sample_id
             });
 
-            return Object.values(samplesById);
-        });
-    })
-    .then( data => res.json(data) )
-    .catch(next);
+            return models.sample.findAll({
+                where: { sample_id: { $in: sampleIds } },
+                include: [
+                    { model: models.project.scope('withUsers', 'withGroups')
+                    //, attributes: [ 'project_id', 'project_name' ]
+                    }
+                ]
+            })
+            .then( samples => {
+                samples.forEach(s => {
+                    // Merge users from direct sharing and through groups, preventing duplicates //TODO move into function
+                    var users = s.project.users;
+                    var seen = users.reduce((map, user) => { map[user.user_id] = 1; return map; }, {});
+                    var allUsers = s.project.project_groups
+                        .reduce((acc, g) => acc.concat(g.users), [])
+                        .reduce((acc, u) => {
+                            if (!seen[u.user_id]) {
+                                u.dataValues.project_to_user = { permission: u.project_group_to_user.permission }; // FIXME kludge
+                                acc.push(u);
+                            }
+                            return acc;
+                        }, [])
+                        .concat(users);
+
+                    samplesById[s.sample_id].users = allUsers;
+                });
+
+                return Object.values(samplesById);
+            });
+        })
+    );
 });
 
 router.get('/samples/taxonomy_search/:query', function (req, res, next) {
