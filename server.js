@@ -1,7 +1,7 @@
 'use strict';
 
-var assert      = require('assert');
-var cluster     = require('cluster');
+var assert = require('assert');
+var cluster = require('cluster');
 var express = require('express');
 
 // Load config file
