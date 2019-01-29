@@ -30,7 +30,7 @@ router.get('/samples/:id(\\d+)', function (req, res, next) {
                         , through: { attributes: [] } // remove connector table from output
                         },
                         { model: models.sample_file
-                        , attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file' ]
+                        , attributes: [ 'sample_file_id', 'sample_id', 'sample_file_type_id', 'file', 'comments' ]
                         , include: [
                             { model: models.sample_file_type
                             , attributes: [ 'sample_file_type_id', 'type' ]
@@ -108,6 +108,8 @@ router.get('/samples', function(req, res, next) {
 });
 
 router.post('/samples', function(req, res, next) {
+    console.log("params:", req.body);
+
     var params = {
         attributes: [
             'sample_id', 'sample_name', 'sample_acc', 'sample_type', 'project_id',
@@ -129,6 +131,7 @@ router.post('/samples', function(req, res, next) {
     toJsonOrError(res, next,
         models.sample.findAll(params)
         .then(samples => { // filter by permission -- workaround for broken clause above
+            console.log("samples:", samples.length);
             return samples.filter(sample => {
                 var hasUserAccess = req.auth.user && req.auth.user.user_name && sample.project.users && sample.project.users.map(u => u.user_name).includes(req.auth.user.user_name);
                 var hasGroupAccess = req.auth.user && req.auth.user.user_name && sample.project.project_groups && sample.project.project_groups.reduce((acc, g) => acc.concat(g.users), []).map(u => u.user_name).includes(req.auth.user.user_name);
