@@ -984,37 +984,37 @@ function getMetaParamValues(db, fieldName, query) {
 }
 
 function fixMongoQuery(query) {
-  return Object.keys(query)
+    return Object.keys(query)
     .filter(x => { return !(query[x] == null || query[x].length == 0) })
     .reduce(
-    (acc, key) => {
-      var val = query[key]
+        (acc, key) => {
+          var val = query[key];
 
-      // e.g., { min__biological__chlorophyll: 1 }
-      if (key.match(/^(min|max)__/)) {
-        var prefix = key.substr(0, 3)
-        var param  = key.substr(5)
+          // e.g., { min__biological__chlorophyll: 1 }
+          if (key.match(/^(min|max)__/)) {
+            var prefix = key.substr(0, 3);
+            var param  = key.substr(5);
 
-        if (acc[param] == undefined)
-          acc[param] = {}
+            if (acc[param] == undefined)
+              acc[param] = {};
 
-        var op = prefix == 'min' ? '$gte' : '$lte'
-        acc[param][op] = val
-      }
-      // e.g., { environment__general_weather: "cloudy" }
-      else if (Array.isArray(val)) {
-        if (acc[key] == undefined)
-          acc[key] = {}
+            var op = prefix == 'min' ? '$gte' : '$lte';
+            acc[param][op] = val;
+          }
+          // e.g., { environment__general_weather: "cloudy" }
+          else if (Array.isArray(val)) {
+            if (acc[key] == undefined)
+              acc[key] = {};
 
-        acc[key]['$in'] = val
-      }
-      else
-        acc[key] = val
+            acc[key]['$in'] = val;
+          }
+          else
+            acc[key] = val;
 
-      return acc
-    },
-    {}
-  );
+          return acc;
+        },
+        {}
+    );
 }
 
 function getMetaSearchResults(db, query) {
