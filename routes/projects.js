@@ -31,6 +31,10 @@ router.get('/projects/:id(\\d+)', function(req, res, next) {
                         { model: models.publication
                         , attributes: [ 'publication_id', 'title', 'author', 'pubmed_id', 'doi', 'pub_date' ]
                         },
+                        { model: models.project_file
+                        , attributes: [ 'project_file_id', 'project_file_type_id', "file", "description" ]
+                        , include: [ models.project_file_type ]
+                        },
                         { model: models.sample
                         , attributes: [ 'sample_id', 'sample_name', 'sample_type' ]
                         , include: [
