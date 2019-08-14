@@ -47,8 +47,8 @@ router.get('/apps/:id(\\d+)', function(req, res, next) {
 
 router.get('/apps/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
     toJsonOrError(res, next,
-        models.app.findOne({ // multiple results could be found, just return one of them
-            where: { app_name: req.params.name },
+        models.app.findAll({
+            order: [ [ 'app_name', 'DESC' ] ],
             include: [
                 { model: models.app_data_type,
                   through: { attributes: [] } // remove connector table from output
@@ -63,6 +63,15 @@ router.get('/apps/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
                   ]
                 }
             ]
+        })
+        .then( apps => {
+            for (let app of apps) {
+                let name = app.app_name.replace(/-(\d+\.)?\d+\.\d+(u\d+)?$/, '');
+                if (name.toLowerCase() == req.params.name.toLowerCase())
+                    return app;
+            }
+
+            return null;
         })
     );
 });
