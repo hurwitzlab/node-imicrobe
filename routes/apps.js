@@ -46,6 +46,8 @@ router.get('/apps/:id(\\d+)', function(req, res, next) {
 });
 
 router.get('/apps/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
+    let name = req.params.name.toLowerCase();
+
     toJsonOrError(res, next,
         models.app.findAll({
             order: [ [ 'app_name', 'DESC' ] ],
@@ -66,8 +68,8 @@ router.get('/apps/:name([\\w\\.\\-\\_]+)', function(req, res, next) {
         })
         .then( apps => {
             for (let app of apps) {
-                let name = app.app_name.replace(/-(\d+\.)?\d+\.\d+(u\d+)?$/, '');
-                if (name.toLowerCase() == req.params.name.toLowerCase())
+                let nameWithoutVersion = app.app_name.replace(/-(\d+\.)?\d+\.\d+(u\d+)?$/, '');
+                if (app.app_name.toLowerCase() == name || nameWithoutVersion.toLowerCase() == name)
                     return app;
             }
 
